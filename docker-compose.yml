@@ -40,6 +40,7 @@ services:
       - karo_data:/karo:ro        # Karo-Spec / Dokumente (nur lesen)
       - karo_export:/karo-export  # Stufe 1: curriculum.db für das Karo-MVP (sonst ungenutzt)
       - ./data:/data              # Exporte und Logs
+    profiles: ["cli"]             # nur per "docker compose run --rm kcteam …", nicht bei "up"
 
   curriculum-agent:
     build: .
