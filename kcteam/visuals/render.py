@@ -946,8 +946,9 @@ def _labeled_diagram(v: S.LabeledDiagram) -> str:
             ay = sum(Y(py) for _, py in p.points) / len(p.points)
         if p.anchor:
             ax, ay = X(p.anchor[0]), Y(p.anchor[1])
-        if p.label and not v.hide_labels:
+        if p.label and (not v.hide_labels or v.number_parts):
             anchors.append((i, ax, ay, p))
+    numbers = {id(p): n for n, (_, _, _, p) in enumerate(anchors, start=1)}
     left = sorted([a for a in anchors if a[1] < dx0 + dw / 2], key=lambda a: a[2])
     right = sorted([a for a in anchors if a[1] >= dx0 + dw / 2], key=lambda a: a[2])
     for side, group in (("left", left), ("right", right)):
@@ -958,7 +959,7 @@ def _labeled_diagram(v: S.LabeledDiagram) -> str:
             lx = dx0 - 14 if side == "left" else dx0 + dw + 14
             c.line(ax, ay, lx, ly, stroke=MUTED, sw=1.2)
             c.circle(ax, ay, 2.5, fill=INK, stroke="none")
-            text = str(v.parts.index(p) + 1) if v.number_parts else p.label
+            text = str(numbers[id(p)]) if v.number_parts else p.label
             if v.number_parts:
                 cx = lx - 12 if side == "left" else lx + 12
                 c.circle(cx, ly, 11, fill=BG, stroke=INK, sw=1.5)
