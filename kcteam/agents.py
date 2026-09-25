@@ -1,12 +1,13 @@
 """Agenten-Aufrufe: Prompt bauen, KI fragen, JSON prüfen, protokollieren."""
 from __future__ import annotations
 
+import hashlib
 import json
 import random
 import threading
 import time
 from pathlib import Path
-from typing import Any, TypeVar
+from typing import Any, Callable, TypeVar
 
 from pydantic import BaseModel, ValidationError
 
@@ -24,12 +25,14 @@ ROLES = {
     "kritiker": "Kritiker",
     "kinderrechts_inspektor": "Kinderrechts-Inspektor",
     "curriculum_agent": "Curriculum-Agent",
+    "lektionsautor": "Lektionsautor",
 }
 # Rollen, für die Karos Spezifikation relevant ist (spart Tokens bei den anderen)
 SPEC_ROLES = {"curriculum_analyst", "fachdidaktiker", "diagnostiker", "visual_didaktiker", "curriculum_agent"}
 ROLE_STAGE = {"curriculum_analyst": "curriculum", "fachdidaktiker": "graph", "niveau_kalibrierer": "calibration",
               "diagnostiker": "diagnostics", "visual_didaktiker": "visuals", "kritiker": "critic",
-              "kinderrechts_inspektor": "inspection", "curriculum_agent": "match"}
+              "kinderrechts_inspektor": "inspection", "curriculum_agent": "match",
+              "lektionsautor": "lesson"}
 
 
 class BudgetExhausted(RuntimeError):
@@ -161,8 +164,29 @@ class AgentRunner:
         meta: dict[str, Any] | None = None,
         stage: str | None = None,
     ) -> T:
+        return self._call(role, task, payload, self.system_prompt(role, schema), schema.model_validate,
+                          entity_id=entity_id, feedback=feedback, web_search=web_search, meta=meta, stage=stage)
+
+    def call_json(self, role: str, task: str, payload: dict[str, Any], json_schema: dict,
+                  validate: Callable[[Any], Any], *, entity_id: str | None = None, feedback: str | None = None,
+                  meta: dict[str, Any] | None = None, stage: str | None = None, extra_system: str = "") -> Any:
+        """Wie `call`, aber mit einem fremden JSON-Schema (z. B. dem Lektionsformat eines Abnehmers).
+        `validate` wirft ValueError, wenn die Antwort nicht passt – dann wird wie bei `call` nachgefragt."""
+        key = (role, "json:" + hashlib.sha256(compact(json_schema).encode()).hexdigest()[:16], id(self.team),
+               hashlib.sha256(extra_system.encode()).hexdigest()[:16])
+        if key not in self._prompt_cache:
+            parts = [self._common, self._role_prompts[role]]
+            if self.team is not None:
+                parts.append(self.team.section(role))
+            if extra_system:
+                parts.append(extra_system)
+            parts.append("## JSON-Schema deiner Antwort\n```json\n" + compact(json_schema) + "\n```")
+            self._prompt_cache[key] = "\n\n".join(parts)
+        return self._call(role, task, payload, self._prompt_cache[key], validate, entity_id=entity_id,
+                          feedback=feedback, web_search=False, meta=meta, stage=stage)
+
+    def _call(self, role, task, payload, system, parse, *, entity_id, feedback, web_search, meta, stage):
         stage = stage or ROLE_STAGE.get(role)
-        system = self.system_prompt(role, schema)
         user = f"## Auftrag\n{task}\n\n## Daten\n```json\n{compact(payload)}\n```"
         if feedback:
             user += ("\n\n## Rückmeldung, die du vollständig umsetzen musst\n" + feedback +
@@ -189,7 +213,7 @@ class AgentRunner:
                 if comp.truncated:
                     raise ValueError("Die Antwort wurde wegen Längenbegrenzung abgeschnitten. Antworte kompakter: "
                                      "weniger und kürzere Aufgaben, keine unnötigen Felder.")
-                obj = schema.model_validate(extract_json(comp.text))
+                obj = parse(extract_json(comp.text))
             except (ValueError, ValidationError) as exc:
                 last_error = str(exc)
                 self.db.log_call(self.run_id, role, self.provider.name, model, entity_id,

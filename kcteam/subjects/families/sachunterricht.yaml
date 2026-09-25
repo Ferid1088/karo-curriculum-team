@@ -37,6 +37,8 @@ roles:
     Gefahren (Verkehr, Feuer) ohne Angst zu machen.
   curriculum_agent: >
     Ordne nach Perspektive (naturwissenschaftlich, technisch, sozial, räumlich, historisch) und Klasse 1–4 zu. Themen mit Bezug zum Körper oder zur Familie besonders behutsam benennen.
+  lektionsautor: >
+    Sehr einfache Sprache, kurze Sätze, Alltagsbeispiele aus Klasse 1–4.
 difficulty_parameters:
   satzlaenge_woerter: Satzlänge
   fachbegriffe_neu: neue Fachbegriffe

@@ -31,6 +31,8 @@ roles:
     gewaltverherrlichenden oder diskriminierenden Texten nicht als Beispiel.
   curriculum_agent: >
     Erkenne, ob Notenlehre, Rhythmus, Harmonielehre oder Werkkenntnis geübt wird. Hör- und Musizieraufgaben kann Karo nicht abbilden; dafür kein Konzept anlegen (out_of_scope, wenn nur das vorkommt).
+  lektionsautor: >
+    Notenlehre in Worten und Schritten; nichts, das Hören oder Musizieren voraussetzt.
 difficulty_parameters:
   notenwerte: vorkommende Notenwerte
   taktarten: vorkommende Taktarten

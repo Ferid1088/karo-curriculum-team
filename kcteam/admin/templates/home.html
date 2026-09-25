@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block main %}
+<h1>Übersicht</h1>
+{% if cur.error %}<div class="note">Curriculum-Datenbank nicht erreichbar: {{ cur.error }}</div>{% else %}
+<div class="grid">
+  <div class="card"><h3>Konzepte</h3>
+    {% for r in cur.concepts %}<div><span class="pill s-{{ r.status }}">{{ r.status }}</span> {{ r.n }}</div>{% else %}<span class="muted">noch keine</span>{% endfor %}</div>
+  <div class="card"><h3>Aufträge</h3>
+    {% for r in cur.requests %}<div><a href="/curriculum/requests?status={{ r.status }}"><span class="pill s-{{ r.status }}">{{ r.status }}</span></a> {{ r.n }}</div>{% else %}<span class="muted">keine</span>{% endfor %}</div>
+  <div class="card"><h3>Lektionen für Abnehmer</h3>
+    {% for r in cur.exports %}<div><span class="pill s-{{ r.status }}">{{ r.status }}</span> {{ r.n }}</div>{% else %}<span class="muted">keine</span>{% endfor %}</div>
+  <div class="card"><h3>Menschliche Prüfung</h3>
+    <div class="big"><a href="/curriculum/queue">{{ cur.queue.n }}</a></div>
+    <div class="muted">offen{% if cur.queue.urgent %}, davon <b>{{ cur.queue.urgent }}</b> dringend (Kind wartet){% endif %}</div></div>
+</div>
+<h2>Fächer</h2>
+<div class="scroll"><table><thead><tr><th>Fach</th><th>Kürzel</th><th>Stand</th><th>Konzepte</th><th>freigegeben</th></tr></thead><tbody>
+{% for s in cur.subjects %}<tr><td><a href="/curriculum/subjects/{{ s.code }}">{{ s.name }}</a></td><td><code>{{ s.code }}</code></td>
+<td><span class="pill">{{ s.status }}</span></td><td>{{ s.n }}</td><td>{{ s.approved }}</td></tr>
+{% else %}<tr><td colspan="5" class="muted">Noch kein Fach. <code>kcteam run --subject Mathematik</code></td></tr>{% endfor %}
+</tbody></table></div>
+{% endif %}
+<h2>Karo</h2>
+{% if karo is none %}<div class="note">Karo-Datenbank nicht gefunden unter <code>{{ karo_path }}</code> (KARO_DB_PATH).</div>
+{% elif karo.error %}<div class="note">Karo-Datenbank: {{ karo.error }}</div>
+{% else %}<div class="grid"><div class="card"><h3>Lernkatalog nach Herkunft</h3>
+{% for r in karo.konzepte %}<div><span class="pill">{{ r.quelle }}</span> {{ r.n }} Konzepte, {{ r.geprueft }} freigegeben</div>{% else %}<span class="muted">leer</span>{% endfor %}
+<div class="small muted" style="margin-top:6px">„curriculum“ = vom Curriculum-Service geliefert</div></div>
+<div class="card"><h3>Tabellen</h3><div class="big"><a href="/tables/karo">{{ karo.tabellen }}</a></div><div class="muted small">{{ karo_path }}</div></div></div>{% endif %}
+{% endblock %}

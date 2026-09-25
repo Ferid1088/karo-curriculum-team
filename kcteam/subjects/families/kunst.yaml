@@ -32,6 +32,8 @@ roles:
     geschützten modernen Werke oder Figuren nachbilden.
   curriculum_agent: >
     Ordne nach Gestaltungsmittel oder Bildanalyse-Kompetenz zu. Abgebildete Kunstwerke nur als Beispiel für das Phänomen nennen, nicht als eigenes Konzept; praktisches Gestalten ist nicht in der App möglich.
+  lektionsautor: >
+    Bildbeschreibungen in Worten; keine Reproduktion geschützter Werke.
 difficulty_parameters:
   fachbegriffe_neu: Anzahl neuer Fachbegriffe
   analyseebene: beschreiben | analysieren | deuten

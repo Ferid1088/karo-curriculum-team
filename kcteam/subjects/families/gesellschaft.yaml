@@ -43,6 +43,8 @@ roles:
     Stereotype. Keine Fragen nach Herkunft, Religion oder politischer Haltung des Kindes oder seiner Familie.
   curriculum_agent: >
     Unterscheide Sachwissen (Epoche, Institution, Raum) von Methoden (Quellenarbeit, Karten lesen, Diagramme). Politische Themen neutral benennen (Beutelsbacher Konsens); keine Parteien, keine aktuellen Personen als Konzepttitel.
+  lektionsautor: >
+    Neutral und multiperspektivisch (Beutelsbacher Konsens); keine aktuellen Politiker oder Parteien in Aufgaben.
 difficulty_parameters:
   distanz: lebensweltnah | regional | national | global | historisch_fern
   perspektiven: Anzahl der zu berücksichtigenden Perspektiven

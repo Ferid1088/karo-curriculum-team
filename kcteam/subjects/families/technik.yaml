@@ -28,6 +28,8 @@ roles:
     Aufsicht durch Erwachsene und Schutzausrüstung.
   curriculum_agent: >
     Ordne nach Themenfeld (Konstruktion, Energie, Informationstechnik, Arbeitssicherheit) zu. Werkstücke und Maschinen nur als Beispiel für das Konzept; Arbeitssicherheit ist immer Voraussetzung für handwerkliche Themen.
+  lektionsautor: >
+    Arbeitssicherheit mitdenken; Werkzeuge nur beschreiben, nicht zum Nachbauen ohne Aufsicht anleiten.
 difficulty_parameters:
   fachbegriffe_neu: neue Fachbegriffe
   bauteile: Anzahl Bauteile

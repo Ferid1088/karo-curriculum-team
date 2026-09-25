@@ -39,6 +39,8 @@ roles:
     Stoffen oder Waffen, auch nicht „zur Warnung“. Mensch-/Körperthemen sachlich, keine Bewertung von Körpern.
   curriculum_agent: >
     Ordne nach Basiskonzept und Themenfeld zu (z. B. Stoffteilchen, Energie, Zelle). Experimentieranleitungen zeigen das Konzept dahinter; gefährliche Versuche selbst sind nie Inhalt.
+  lektionsautor: >
+    Basiskonzept nennen, Alltagsbezug ohne gefährliche Versuche; Einheiten immer mitschreiben.
 difficulty_parameters:
   fachbegriffe_neu: Anzahl neuer Fachbegriffe
   abstraktion: phänomen | modell | formal

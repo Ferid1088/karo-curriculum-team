@@ -41,6 +41,8 @@ roles:
     (fiktive Figuren für „sich vorstellen“ nutzen).
   curriculum_agent: >
     Ordne nach Lernjahr und GER-Stufe zu, nicht nach Klasse allein. Vokabellisten zeigen das Wortfeld, Lückentexte das Grammatikphänomen (z. B. simple past vs. present perfect). learning_year und cefr bei neuen Konzepten angeben.
+  lektionsautor: >
+    Wortschatz und Strukturen nur aus Lernjahr und GER-Stufe des Konzepts; Anweisungen auf Deutsch.
 difficulty_parameters:
   lernjahr: 1–9
   cefr: pre-A1 | A1 | A2 | B1 | B2 | C1

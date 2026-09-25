@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}Lektion #{{ e.id }}{% endblock %}
+{% block main %}
+<div class="crumbs"><a href="/curriculum/exports">Lektionen</a> / #{{ e.id }}</div>
+<h1>Lektion #{{ e.id }} <span class="pill s-{{ e.status }}">{{ e.status }}</span></h1>
+<div class="kv card">{% for k, v in e.items() if k != 'lesson' %}<div>{{ k }}</div><div>{% if k == 'concept_id' and v %}<a href="/curriculum/concepts/{{ v }}">{{ v }}</a>{% else %}{{ v|pretty }}{% endif %}</div>{% endfor %}</div>
+{% set l = e.lesson %}
+{% if l and l.fehlertypen is defined %}
+<h2>{{ l.konzept.label }} <span class="muted small">Kl. {{ l.konzept.klasse_von }}–{{ l.konzept.klasse_bis }}</span></h2>
+{% if l.erstkontakt %}<div class="card"><b>Erstkontakt:</b> {{ l.erstkontakt.anker }}<br>Erste Aufgabe: {{ l.erstkontakt.erste_aufgabe.frage }} → <b>{{ l.erstkontakt.erste_aufgabe.loesung }}</b></div>{% endif %}
+{% for f in l.fehlertypen %}<details open><summary>{{ f.label }} <span class="muted small">{{ f.key }}</span></summary>
+<p>{{ f.beschreibung }}</p><p class="small">Erkennbar an: {% for a in f.antworten %}<code>{{ a }}</code> {% endfor %}</p>
+<p><b>Regel:</b> {{ f.erklaerung.regel }} · <b>Erkenntnis:</b> {{ f.erklaerung.erkenntnis }}</p>
+<p class="small">Darstellung: <code>{{ f.visualisierung.component }}</code> {{ f.visualisierung.parameters|short(100) }}</p>
+<table><thead><tr><th>Rolle</th><th>Frage</th><th>Lösung</th><th>typischer Fehler</th></tr></thead><tbody>
+{% for rolle, a in f.aufgaben.items() %}<tr><td>{{ rolle }}</td><td>{{ a.frage }}{% if a.optionen %}<div class="small muted">{{ a.optionen|join(' · ') }}</div>{% endif %}</td><td>{{ a.loesung }}</td><td>{{ a.typischer_fehler }}</td></tr>{% endfor %}
+</tbody></table></details>{% endfor %}
+{% endif %}
+{% if l %}<details><summary>JSON</summary><pre>{{ l|pretty }}</pre></details>{% endif %}
+{% endblock %}

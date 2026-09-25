@@ -31,6 +31,8 @@ roles:
     Sicherheitshinweis.
   curriculum_agent: >
     Nur Theorie (Regeln, Training, Gesundheit, Bewegungsbeschreibung) ist in der App möglich. Reine Praxis-Übungen sind out_of_scope; Körper- und Gewichtsthemen nie wertend benennen.
+  lektionsautor: >
+    Nur Theorie; keine Aufgaben zu Körpergewicht oder Aussehen.
 difficulty_parameters:
   fachbegriffe_neu: neue Fachbegriffe
   abstraktion: regel | prinzip | biologische_begruendung

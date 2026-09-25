@@ -35,6 +35,8 @@ roles:
     Gewalt kritisch einordnen, keine verharmlosende Darstellung; Ovid-Stellen mit sexueller Gewalt nicht in Sek I.
   curriculum_agent: >
     Arbeitsblätter zeigen meist Formen (Deklination, Konjugation), Satzbau oder Übersetzungsstellen. Ordne nach Grammatikphänomen und Lernjahr zu, nicht nach dem Autor des Textes. Originaltexte sind gemeinfrei, Schulbuch-Übersetzungen nicht – nichts übernehmen.
+  lektionsautor: >
+    Beispiele mit echten, einfachen Formen; Übersetzungen eigenständig formulieren, keine Schulbuchsätze.
 difficulty_parameters:
   lernjahr: 1–8
   formen: bekannte Formen

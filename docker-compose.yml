@@ -5,8 +5,11 @@
 # Nutzt Karo schon Supabase/Postgres? Dann DATABASE_URL in .env darauf zeigen lassen
 # und den Dienst "postgres" weglassen:  docker compose run --rm --no-deps kcteam
 #
-# Curriculum-Agent als Dienst für Karo (läuft dauerhaft, startet nach Neustart wieder):
-#         docker compose up -d curriculum-agent
+# Curriculum-Service für Karo (HTTP-API + Agent, laufen dauerhaft):
+#         docker compose --profile agent up -d
+#         docker compose run --rm kcteam api-client add --name karo      (Schlüssel für Karo, einmalig)
+# Datenbank-Browser (nur lesen, http://127.0.0.1:8090, braucht ADMIN_PASSWORD in .env):
+#         docker compose --profile admin up -d
 
 services:
   postgres:
@@ -53,11 +56,55 @@ services:
       - ./data:/data
     profiles: ["agent"]
 
+  curriculum-api:
+    build: .
+    command: ["api"]
+    env_file: .env
+    environment:
+      KCTEAM_API_HOST: 0.0.0.0
+      KCTEAM_API_PORT: "8088"
+      KCTEAM_API_WORKERS: ${KCTEAM_API_WORKERS:-2}
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:${KCTEAM_API_HOST_PORT:-8088}:8088"   # nur auf deinem Rechner
+    networks: [default, karo-net]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8088/health', timeout=2)"]
+      interval: 10s
+      retries: 5
+    profiles: ["agent"]
+
+  admin:
+    build: .
+    command: ["admin"]
+    env_file: .env
+    environment:
+      ADMIN_HOST: 0.0.0.0
+      ADMIN_PORT: "8090"
+      KARO_DB_PATH: ${KARO_DB_PATH:-/karo/karo.db}
+    restart: on-failure:3
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:${ADMIN_HOST_PORT:-8090}:8090"         # nur auf deinem Rechner
+    volumes:
+      - karo_data:/karo:ro        # Karos Datenbank, nur lesen
+    profiles: ["admin"]
+
+networks:
+  # Karo erreicht den Dienst als http://curriculum-api:8088 (Karo: docker-compose.curriculum.yml)
+  karo-net:
+    name: karo-net
+
 volumes:
   pgdata:
   # Karos Volume (Spec lesen). Gibt es das Volume schon (Karo läuft), wird es mitbenutzt, sonst neu angelegt.
   karo_data:
-    name: ${KARO_VOLUME:-karo_data}
+    name: ${KARO_VOLUME:-karo_karo-data}
   # Stufe 1: das Volume, das Karo unter /data einbindet (dort landet curriculum.db). Standard: wie KARO_VOLUME.
   karo_export:
-    name: ${KARO_EXPORT_VOLUME:-${KARO_VOLUME:-karo_data}}
+    name: ${KARO_EXPORT_VOLUME:-${KARO_VOLUME:-karo_karo-data}}

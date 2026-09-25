@@ -9,6 +9,11 @@ dependencies = [
     "psycopg[binary]>=3.1",
     "anthropic>=0.40",
     "openai>=1.50",
+    "fastapi>=0.110",
+    "uvicorn>=0.29",
+    "jinja2>=3.1",
+    "jsonschema>=4.21",
+    "httpx>=0.27",
 ]
 
 [project.optional-dependencies]
@@ -25,4 +30,4 @@ build-backend = "setuptools.build_meta"
 include = ["kcteam*"]
 
 [tool.setuptools.package-data]
-kcteam = ["prompts/*.md", "sql/*.sql", "subjects/*.yaml", "subjects/families/*.yaml"]
+kcteam = ["prompts/*.md", "sql/*.sql", "subjects/*.yaml", "subjects/families/*.yaml", "admin/templates/*.html"]

@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block title %}{{ table }}{% endblock %}
+{% block main %}
+<div class="crumbs"><a href="/tables/{{ which }}">Tabellen</a> / {{ which }}</div>
+<h1>{{ table }} <span class="muted small">{{ total }} Zeilen</span></h1>
+<form class="filter" method="get"><input type="search" name="q" value="{{ q }}" placeholder="in allen Spalten suchen …"><button>Suchen</button></form>
+{% if hidden %}<div class="note small">Ausgeblendet (Geheimnisse): {{ hidden|join(', ') }}</div>{% endif %}
+<div class="scroll"><table><thead><tr>{% for c in cols %}<th>{{ c }}</th>{% endfor %}</tr></thead><tbody>
+{% for r in rows %}<tr>{% for c in cols %}{% set v = r[c] %}<td>{% if v is mapping or (v is iterable and v is not string) %}<details style="margin:0;padding:2px 6px"><summary class="small">{{ v|short(40) }}</summary><pre>{{ v|pretty }}</pre></details>{% else %}{{ v|short(120) }}{% endif %}</td>{% endfor %}</tr>
+{% else %}<tr><td colspan="{{ cols|length }}" class="muted">keine Zeilen</td></tr>{% endfor %}</tbody></table></div>
+<div class="pager">{% if page > 1 %}<a href="?q={{ q|urlencode }}&page={{ page - 1 }}">← zurück</a>{% endif %}<span class="muted">Seite {{ page }} / {{ pages }}</span>{% if page < pages %}<a href="?q={{ q|urlencode }}&page={{ page + 1 }}">weiter →</a>{% endif %}</div>
+{% endblock %}

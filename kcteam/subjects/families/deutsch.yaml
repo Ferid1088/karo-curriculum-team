@@ -43,6 +43,8 @@ roles:
     (Krieg, Tod, Gewalt) nur altersgerecht und eingeordnet.
   curriculum_agent: >
     Erkenne den Kompetenzbereich an den Aufgaben (Rechtschreibregel, Wortart, Satzglied, Textsorte, Lesestrategie). Lesetexte auf Arbeitsblättern sind fast immer geschützt: nur das Phänomen zuordnen, keine Textstellen übernehmen.
+  lektionsautor: >
+    Eigene kurze Beispielsätze statt Textauszügen; Rechtschreib- und Grammatikregeln als Handlung formulieren.
 difficulty_parameters:
   textlaenge_woerter: Länge eines Lesetextes
   satzlaenge_woerter: durchschnittliche Satzlänge

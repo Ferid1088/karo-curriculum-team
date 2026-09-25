@@ -40,6 +40,8 @@ roles:
     keine echten Marken und Preise von Markenprodukten.
   curriculum_agent: >
     Die Rechenaufgaben verraten Konzept und Niveau genau (Zahlraum, Nennerart, Anzahl der Schritte, Darstellung). Ein Blatt mit gemischten Aufgaben gehört meist zu mehreren vorhandenen Konzepten – dann existing mit allen IDs.
+  lektionsautor: >
+    Zahlen so wählen, dass jede Rechnung aufgeht; Beispiel und geführte Aufgabe mit verschiedenen Zahlen.
 difficulty_parameters:
   zahlenraum: größte vorkommende Zahl (20, 100, 1000, 1 000 000, …)
   stellen_nach_komma: Dezimalstellen

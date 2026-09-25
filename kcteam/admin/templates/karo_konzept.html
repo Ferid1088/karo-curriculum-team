@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}{{ k.label }}{% endblock %}
+{% block main %}
+<div class="crumbs"><a href="/karo">Karo-Katalog</a> / {{ k.konzept_key }}</div>
+<h1>{{ k.label }} <span class="pill {{ 's-approved' if k.geprueft_am }}">{{ 'freigegeben' if k.geprueft_am else 'ungeprüft' }}</span></h1>
+<p class="muted">{{ k.fach }} · {{ k.thema_key }} · Klasse {{ k.klasse_von }}–{{ k.klasse_bis }} · Herkunft <b>{{ k.quelle }}</b> · Stichworte {{ k.stichworte }}</p>
+{% for e in erst %}<div class="card"><b>Erstkontakt:</b> {{ e.anker }}<div class="small">{{ e.erste_aufgabe|short(160) }}</div></div>{% endfor %}
+{% for x in fehler %}<details open><summary>{{ x.f.label }} <span class="muted small">{{ x.f.fehler_key }}</span></summary>
+<p>{{ x.f.beschreibung }}</p><p class="small">Erkennbar an: {% for a in x.alias %}<code>{{ a }}</code> {% else %}–{% endfor %}</p>
+{% for er in x.erklaerungen %}<div class="small">Erklärung Kl. {{ er.klasse }} v{{ er.version }} · Darstellung {{ er.visualisierung|short(80) }} · ausgeliefert {{ er.ausgeliefert }}×</div>{% endfor %}
+<table style="margin-top:8px"><thead><tr><th>Rolle</th><th>Frage</th><th>Lösung</th><th>typischer Fehler</th><th>sichtbar</th></tr></thead><tbody>
+{% for a in x.aufgaben %}<tr><td>{{ a.rolle }}</td><td>{{ a.frage }}</td><td>{{ a.loesung }}</td><td>{{ a.typischer_fehler or '' }}</td><td>{{ '✓' if a.geprueft_am and a.aktiv else '–' }}</td></tr>{% endfor %}
+</tbody></table></details>{% endfor %}
+{% if hilfe %}<h2>Hilfe &amp; FAQ</h2><div class="scroll"><table><thead><tr><th>Art</th><th>Schlüssel</th><th>Text</th></tr></thead><tbody>
+{% for h in hilfe %}<tr><td>{{ h.art }}</td><td>{{ h.schluessel }}</td><td>{{ h.text }}</td></tr>{% endfor %}</tbody></table></div>{% endif %}
+{% endblock %}

@@ -1,0 +1,8 @@
+{% extends "base.html" %}
+{% block title %}Tabellen{% endblock %}
+{% block main %}
+<h1>{{ 'Curriculum (Postgres)' if which == 'curriculum' else 'Karo (SQLite)' }} – Tabellen</h1>
+<div class="scroll"><table><thead><tr><th>Name</th><th>Art</th><th>Zeilen{{ ' (ca.)' if which == 'curriculum' }}</th></tr></thead><tbody>
+{% for name, art, n in items %}<tr><td><a href="/tables/{{ which }}/{{ name }}">{{ name }}</a></td><td>{{ art }}</td><td>{{ n if n is not none and n >= 0 else '?' }}</td></tr>{% endfor %}
+</tbody></table></div>
+{% endblock %}

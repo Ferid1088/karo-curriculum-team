@@ -62,6 +62,10 @@ def approve(db, qid: int, note: str, who: str = "human") -> str:
             from .ondemand import admin_approve_request, request_id
             msg = admin_approve_request(db, request_id(eid), (q["payload"] or {}).get("raw"),
                                         ((q["payload"] or {}).get("verdict") or {}).get("findings") or [], who, note)
+        elif et == "export":
+            from .lessons import admin_approve_export, export_id
+            pl = q["payload"] or {}
+            msg = admin_approve_export(db, export_id(eid), pl.get("raw") or pl.get("content"))
         elif stage in ("calibration", "diagnostics", "visuals", "final") and et != "concept":
             raise ValueError(f"Unerwarteter Eintrag {et}/{stage}")
     verdict = (q["payload"] or {}).get("verdict") or {}
@@ -102,6 +106,10 @@ def reject(db, qid: int, note: str, who: str = "human") -> str:
         from .ondemand import request_id
         db.finish_request(request_id(eid), "rejected", reason_code="rejected_by_human", message=note or None)
         msg = f"{eid}: Auftrag abgelehnt"
+    if et == "export":
+        from .lessons import export_id, finish_export
+        finish_export(db, export_id(eid), "blocked", reason_code="rejected_by_human", message=note or None)
+        msg = f"{eid}: Lektion abgelehnt"
     db.log_review(None, et, eid, stage, "human", "override_reject", 1, [], note)
     _resolve(db, qid, "rejected: " + (note or ""), who)
     return msg
@@ -157,6 +165,12 @@ def retry(db, qid: int, note: str, who: str = "human") -> str:
                       updated_at=now() WHERE id=%s""", (note or None, request_id(eid)))
         db.query("SELECT pg_notify('kcteam_requests', %s)", (str(request_id(eid)),))
         hint = " (Auftrag neu eingereiht)"
+    elif et == "export":
+        from .lessons import export_id
+        db.query("""UPDATE curriculum.lesson_exports SET status='queued', reason_code='retry', message=%s, attempts=0,
+                      next_attempt_at=now(), finished_at=NULL, updated_at=now() WHERE id=%s""",
+                 (note or None, export_id(eid)))
+        hint = " (Lektion wird neu geschrieben)"
     elif et == "curriculum":
         db.query("UPDATE curriculum.subjects SET status='mapped' WHERE lower(name)=lower(%s)", (eid,))
         hint = " (Themenlandkarte: nächsten Lauf mit --refresh-map starten)"

@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block main %}
+<h1>{{ title }} <span class="muted small">{{ rows|length }}</span></h1>
+{% if note %}<div class="note">{{ note }}</div>{% endif %}
+{% if statuses %}<form class="filter" method="get"><select name="status"><option value="">alle</option>{% for st in statuses %}<option {{ 'selected' if st == filter_status }}>{{ st }}</option>{% endfor %}</select><button>Filtern</button></form>{% endif %}
+{% set links = links or {} %}
+{% if rows %}<div class="scroll"><table><thead><tr>{% for k in rows[0].keys() %}<th>{{ k }}</th>{% endfor %}</tr></thead><tbody>
+{% for r in rows %}<tr>{% for k, v in r.items() %}<td>
+{%- if k == 'status' or k == 'decision' %}<span class="pill s-{{ v }}">{{ v }}</span>
+{%- elif k in links and v %}{% if v is string or v is number %}<a href="/curriculum/{{ links[k] }}/{{ v }}">{{ v }}</a>{% else %}{% for x in v %}<a href="/curriculum/{{ links[k] }}/{{ x }}">{{ x }}</a>{{ ', ' if not loop.last }}{% endfor %}{% endif %}
+{%- elif v is sameas true %}✓{% elif v is sameas false %}–
+{%- elif v.strftime is defined %}<span class="small">{{ v.strftime('%d.%m.%y %H:%M') }}</span>
+{%- else %}{{ v|short(90) }}{% endif %}</td>{% endfor %}</tr>{% endfor %}
+</tbody></table></div>{% else %}<p class="muted">Keine Einträge.</p>{% endif %}
+{% endblock %}

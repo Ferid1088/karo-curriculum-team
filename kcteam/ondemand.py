@@ -10,12 +10,14 @@ Stufen (siehe 004_requests.sql für 0 und 1, die ohne KI in der Datenbank laufen
 from __future__ import annotations
 
 import json
+import os
 import re
 import threading
 from typing import Any, Callable
 
 import psycopg
 
+from . import lessons
 from .agents import BudgetExhausted
 from .integrator import check_graph
 from .pipeline import Pipeline, SubjectBlocked
@@ -93,15 +95,15 @@ def worksheet_hint(tasks: list[str]) -> str | None:
 class _Heartbeat:
     """Hält den Auftrag als 'lebend' markiert, damit ein abgestürzter Dienst ihn nicht ewig blockiert."""
 
-    def __init__(self, db, rid: int, every: float = 60):
-        self.db, self.rid, self.every = db, rid, every
+    def __init__(self, db, rid: int, every: float = 60, table: str = "topic_requests"):
+        self.db, self.rid, self.every, self.table = db, rid, every, table
         self._stop = threading.Event()
         self._t = threading.Thread(target=self._run, daemon=True)
 
     def _run(self):
         while not self._stop.wait(self.every):
             try:
-                self.db.query("UPDATE curriculum.topic_requests SET heartbeat_at=now() WHERE id=%s", (self.rid,))
+                self.db.query(f"UPDATE curriculum.{self.table} SET heartbeat_at=now() WHERE id=%s", (self.rid,))
             except psycopg.Error:
                 pass
 
@@ -125,15 +127,28 @@ class CurriculumAgent:
         self.allow_unknown = bool(oc.get("allow_unknown_subjects", False))
         self.stop = threading.Event()
         self.current: Pipeline | None = None
+        self.current_export: Pipeline | None = None
 
     # ------------------------------------------------------------ Dienst
     def serve(self, once: bool = False) -> None:
-        """Wartet auf Aufträge (LISTEN/NOTIFY, dazu alle `poll_seconds` eine Abfrage als Rückfallebene)."""
+        """Wartet auf Aufträge (LISTEN/NOTIFY, dazu alle `poll_seconds` eine Abfrage als Rückfallebene).
+
+        Lektionen laufen in einem eigenen Worker: sie brauchen einen KI-Aufruf und sollen nie hinter dem
+        Vervollständigen eines Auftrags (Visuals, Kritiker, Voraussetzungen) warten."""
         listen = psycopg.connect(self.db.url, autocommit=True)
+        worker = disp = None
+        if not once:
+            worker = threading.Thread(target=self._export_loop, daemon=True, name="lessons")
+            worker.start()
+            if str(os.environ.get("KCTEAM_WEBHOOKS", "true")).strip().lower() not in ("0", "false", "no", "off"):
+                from .webhooks import Dispatcher
+                disp = Dispatcher(self.db, log=self.log)
+                disp.start()
         try:
             listen.execute("LISTEN kcteam_requests")
             while not self.stop.is_set():
-                n = self.db.requeue_stale_requests()
+                n = self.db.requeue_stale_requests() + lessons.requeue_stale_exports(
+                    self.db, max_attempts=self.max_attempts)
                 if n:
                     self.log(f"↺ {n} hängende Aufträge wieder eingereiht")
                 while not self.stop.is_set() and self.process_next():
@@ -144,13 +159,31 @@ class CurriculumAgent:
                     pass
         finally:
             listen.close()
+            if disp:
+                disp.shutdown()
+
+    def _export_loop(self) -> None:
+        """Lektions-Worker: Wartende an fertige Konzepte hängen und Lektionen schreiben (alle 2 s)."""
+        while not self.stop.is_set():
+            try:
+                lessons.promote_waiting(self.db)
+                while not self.stop.is_set() and self.process_export():
+                    pass
+            except Exception as exc:  # noqa: BLE001 – der Worker darf nicht sterben
+                self.log(f"⚠ Lektions-Worker: {exc!r}")
+            self.stop.wait(2)
 
     def shutdown(self) -> None:
         self.stop.set()
-        if self.current is not None:
-            self.current.shutdown()
+        for p in (self.current, self.current_export):
+            if p is not None:
+                p.shutdown()
 
     def process_next(self) -> bool:
+        # Lektionen zuerst (ein Aufruf, ein Kind wartet vielleicht); im Dienst übernimmt das auch der Worker
+        lessons.promote_waiting(self.db)
+        if self.process_export():
+            return True
         req = self.db.claim_request()
         if not req:
             return False
@@ -181,6 +214,59 @@ class CurriculumAgent:
             finally:
                 self.current = None
         return True
+
+    # ------------------------------------------------------------ Lektionen im Format des Abnehmers
+    def process_export(self) -> bool:
+        row = lessons.claim_export(self.db)
+        if not row:
+            return False
+        self.log(f"\n▶ Lektion #{row['id']}: {row['concept_id']} Kl. {row['grade']} im Format „{row['format_id']}“")
+        with _Heartbeat(self.db, row["id"], table="lesson_exports"):
+            try:
+                self.handle_export(row)
+            except BudgetExhausted as exc:
+                self.db.query("""UPDATE curriculum.lesson_exports SET status='queued', attempts=attempts-1,
+                                   message=%s, next_attempt_at=now() + interval '10 minutes'
+                                 WHERE id=%s AND status='running'""", (f"pausiert: {exc}"[:500], row["id"]))
+                self.log(f"⏸ Lektion #{row['id']} pausiert: {exc}")
+            except Exception as exc:  # noqa: BLE001
+                self.log(f"⚠ Lektion #{row['id']}: {exc!r}")
+                if row["attempts"] >= self.max_attempts:
+                    lessons.finish_export(self.db, row["id"], "failed", reason_code="error", message=str(exc),
+                                          only_from=("running",))
+                else:
+                    self.db.query("""UPDATE curriculum.lesson_exports SET status='queued', message=%s,
+                                       next_attempt_at=now() + make_interval(mins => 2 ^ attempts)
+                                     WHERE id=%s AND status='running'""", (str(exc)[:500], row["id"]))
+            finally:
+                self.current_export = None
+        return True
+
+    def handle_export(self, row: dict) -> None:
+        c = self.db.concept(row["concept_id"])
+        subj = self.db.one("SELECT name FROM curriculum.subjects WHERE code=%s", (c["subject_code"],)) if c else None
+        team = SubjectTeam.for_subject(subj["name"] if subj else "Allgemein")
+        g = row["grade"]
+        run_id = self.db.start_run(team.name, (g, g), self.provider.name)
+        pipe = Pipeline(cfg=self.cfg, provider=self.provider, db=self.db, run_id=run_id, karo_spec=self.karo_spec,
+                        log=self.log, team=team)
+        self.current_export = pipe
+        status, err = "finished", None
+        try:
+            st, lesson, reason = lessons.generate(pipe, self.db, row)
+            lessons.finish_export(self.db, row["id"], st, lesson, reason_code=reason,
+                                  message=self._last_findings(f"EXP-{row['id']}") if st == "blocked" else None,
+                                  only_from=("running",))
+            self.log(f"   {'✅' if st == 'ready' else '⛔'} Lektion #{row['id']}: {st}")
+        except BudgetExhausted:
+            status = "budget_exhausted"
+            raise
+        except Exception as exc:
+            status, err = "failed", repr(exc)
+            raise
+        finally:
+            pipe.shutdown()
+            self.db.finish_run(run_id, status, {**pipe.stats, **self.db.run_stats(run_id)}, err)
 
     def _is_ready(self, rid: int) -> list[str]:
         row = self.db.one("SELECT status, result_concepts FROM curriculum.topic_requests WHERE id=%s", (rid,))
@@ -271,6 +357,7 @@ class CurriculumAgent:
         self.db.finish_request(rid, "ready", approved, message=self._readiness(approved))
         self.log(f"   ✅ bereit für Karo: {', '.join(approved)}")
         auto_export(self.cfg, self.db, self.log)   # Stufe 1: SQLite-Kopie für das Karo-MVP
+        lessons.promote_waiting(self.db)   # wartende Lektionen: der Lektions-Worker schreibt sie jetzt
 
         # ---- Vervollständigen im Hintergrund (Konzepte bleiben sichtbar)
         self.db.update_request(rid, stage="complete")

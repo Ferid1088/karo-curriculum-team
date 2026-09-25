@@ -34,6 +34,8 @@ roles:
     Namen oder Accounts in Beispielen; Cybermobbing und Datenschutz sachlich und schützend.
   curriculum_agent: >
     Erkenne, ob es um Konzepte (Algorithmen, Daten, Codierung) oder um eine konkrete Programmiersprache/App geht. Konzepte werden werkzeugneutral benannt; Markennamen von Apps oder Plattformen nicht in Titel übernehmen.
+  lektionsautor: >
+    Werkzeugneutral erklären; Code nur als kurzer Text in Aufgaben, nie als ausführbarer Inhalt.
 difficulty_parameters:
   kontrollstrukturen: Anzahl/Art (Sequenz, Verzweigung, Schleife)
   verschachtelung: Tiefe

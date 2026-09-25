@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block title %}Karo-Katalog{% endblock %}
+{% block main %}
+<h1>Karo-Lernkatalog</h1>
+{% if missing %}<div class="note">Karo-Datenbank nicht gefunden unter <code>{{ karo_path }}</code>. In Docker wird Karos Volume schreibgeschützt nach <code>/karo</code> gemountet (KARO_VOLUME).</div>
+{% else %}
+<form class="filter" method="get"><input type="search" name="q" value="{{ q }}" placeholder="Konzept, Stichwort …"><button>Suchen</button></form>
+<div class="scroll"><table><thead><tr><th>Konzept</th><th>Fach</th><th>Thema</th><th>Kl.</th><th>Fehlertypen</th><th>Herkunft</th><th>sichtbar</th></tr></thead><tbody>
+{% for k in konzepte %}<tr><td><a href="/karo/konzept/{{ k.id }}">{{ k.label }}</a><div class="small muted">{{ k.konzept_key }}</div></td><td>{{ k.fach }}</td><td>{{ k.thema_key }}</td><td>{{ k.klasse_von }}–{{ k.klasse_bis }}</td><td>{{ k.fehlertypen }}</td>
+<td><span class="pill {{ 's-approved' if k.quelle == 'curriculum' }}">{{ k.quelle }}</span></td><td>{{ '✓' if k.geprueft_am and k.aktiv else '–' }}</td></tr>
+{% else %}<tr><td colspan="7" class="muted">Keine Konzepte.</td></tr>{% endfor %}</tbody></table></div>
+{% endif %}
+{% endblock %}

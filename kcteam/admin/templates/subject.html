@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}{{ s.name }}{% endblock %}
+{% block main %}
+<div class="crumbs"><a href="/">Übersicht</a> / Fach</div>
+<h1>{{ s.name }} <span class="muted small">{{ s.code }} · Klasse {{ s.grade_min }}–{{ s.grade_max }}</span></h1>
+<form class="filter" method="get"><input type="search" name="q" value="{{ q }}" placeholder="Konzept suchen …">
+<select name="status"><option value="">alle Stände</option>{% for st in statuses %}<option {{ 'selected' if st == status }}>{{ st }}</option>{% endfor %}</select>
+<button>Filtern</button></form>
+{% for b in blocks %}{% set cs = by_block.get(b.id, []) %}{% if cs or not (q or status) %}
+<details {{ 'open' if cs and (q or status or loop.length < 6) }}><summary>{{ b.title }} <span class="muted small">Kl. {{ b.grade_min }}–{{ b.grade_max }} · {{ cs|length }} Konzepte</span> <span class="pill s-{{ b.status }}">{{ b.status }}</span></summary>
+<div class="scroll" style="margin-top:8px"><table><thead><tr><th>Konzept</th><th>Kl.</th><th>Stand</th><th>Version</th></tr></thead><tbody>
+{% for c in cs %}<tr><td><a href="/curriculum/concepts/{{ c.id }}">{{ c.title }}</a><div class="small muted">{{ c.id }}</div></td>
+<td>{{ c.first_contact_grade }}→{{ c.target_grade }}</td><td><span class="pill s-{{ c.status }}">{{ c.status }}</span></td><td>{{ c.version }}</td></tr>
+{% else %}<tr><td colspan="4" class="muted">keine</td></tr>{% endfor %}</tbody></table></div></details>
+{% endif %}{% endfor %}
+{% endblock %}

@@ -318,7 +318,7 @@ SELECT karo.resolve_topic(
 
 Stand abfragen: `SELECT karo.request_status(42);` → `queued` · `running` · **`ready`** (Konzepte sind freigegeben und nutzbar, Visuals folgen) · `done` · `blocked` · `rejected` · `failed`. Es werden nur freigegebene Konzepte zurückgegeben. Statt abzufragen kann Karo auf `LISTEN karo_topic_ready` hören (JSON mit `request_id`, `status`, `concepts`).
 
-**Was der Agent tut** (Dienst: `docker compose up -d curriculum-agent`)
+**Was der Agent tut** (Dienst: `docker compose --profile agent up -d`)
 1. **Zuordnen** – ein KI-Aufruf entscheidet anhand der Aufgaben: vorhandenes Konzept (häufigster Fall; der Suchbegriff wird gelernt, damit die nächste Anfrage ohne KI gefunden wird), neues Konzept (+ höchstens zwei fehlende Voraussetzungen) oder kein Schulstoff. Neue Konzepte prüft der Kinderrechts-Inspektor – sein Veto gilt.
 2. **Schnellspur** – Kalibrierung, Diagnostik, Schlussprüfung → `ready`. Das dauert typischerweise 1–2 Minuten; wartende Kinder haben Vorrang vor Stapelläufen.
 3. **Vervollständigen** im Hintergrund (Konzept bleibt sichtbar): Visuals, Kritiker mit automatischer Nacharbeit, fehlende Voraussetzungen, Vorab-Auftrag für das wahrscheinlich nächste Thema → `done`.
@@ -335,6 +335,64 @@ kcteam request -s Mathematik -g 7 -t "Prozentrechnung" --task "20 % von 80 €" 
 kcteam serve --once                                                           # Aufträge abarbeiten
 kcteam requests                                                               # Stand
 ```
+
+---
+
+## Curriculum-Service über HTTP – so nutzt Karo den Agenten
+
+Der Agent bleibt ein **eigenständiger Dienst**: Karo kennt weder seine Datenbank noch seine Agenten, nur eine kleine HTTP-API. Andere Apps können ihn genauso nutzen.
+
+```
+Karo ──HTTP──▶ curriculum-api (127.0.0.1:8088) ──▶ Postgres ◀── curriculum-agent (KI-Team)
+                 Sofortsuche, fertige Lektionen          Aufträge, Lektionen schreiben
+                 (nur Datenbank, ~5–10 ms)               (im Hintergrund, mit Inspektor)
+```
+
+Starten und Karo anmelden:
+```bash
+docker compose --profile agent up -d                        # API + Agent
+docker compose run --rm kcteam api-client add --name karo   # Schlüssel kc_… (wird nur einmal angezeigt)
+```
+In Karo: `KARO_CURRICULUM_KEY=kc_…` in `.env`, dann mit `docker-compose.curriculum.yml` starten (siehe Karos README). Karo erreicht den Dienst im Docker-Netz `karo-net` als `http://curriculum-api:8088`.
+
+| Aufruf | Zweck |
+|---|---|
+| `POST /v1/lessons` | **Lektion im Format des Abnehmers.** Karo schickt Fach, Klasse, Thema und sein Format (JSON-Schema, Komponentenregister, Formatregeln). Antwort `ready` + Lektion · `202 pending` + `retry_after` · `unavailable` + Grund |
+| `GET /v1/lessons/{id}` | Stand einer Lektion |
+| `POST /v1/lessons/{id}/reject` | Abnehmer verwirft die Lektion (eigene Prüfung) → wird mit dem Grund neu geschrieben; nach `KCTEAM_MAX_CLIENT_REJECTS` an einen Menschen |
+| `POST /v1/resolve` | Thema suchen/bestellen (wie `karo.resolve_topic`), optional mit Konzept-Bundle |
+| `GET /v1/requests/{id}` · `GET /v1/concepts/{id}` (ETag) · `POST /v1/learning-path` | Stand, Konzept, Lernpfad |
+
+Doku zum Ausprobieren: `http://127.0.0.1:8088/docs`. Anmeldung mit `Authorization: Bearer kc_…`; der Schlüssel bestimmt die Einrichtung (Tageslimit, Nachfrage). POST-Aufrufe dürfen `Idempotency-Key` mitschicken.
+
+**Lektionen im fremden Format.** Der **Lektionsautor** schreibt die Lektion auf Grundlage des geprüften Konzepts (Niveaus, Fehlvorstellungen mit bekannten falschen Antworten, Beispielaufgaben, Voraussetzungen) genau im mitgeschickten Schema. Geprüft wird automatisch: Schema, kein HTML/SVG/Skript, nur Komponenten und Parameter aus dem Register – dann das Veto des Kinderrechts-Inspektors. Die Lektion wird pro *Konzeptversion × Klasse × Format* vorgehalten: das nächste Kind bekommt sie ohne KI-Aufruf. Ist das Thema neu, wartet die Lektion auf den Auftrag und wird geschrieben, sobald das Konzept freigegeben ist – noch vor dem Vervollständigen im Hintergrund.
+
+**Latenz** (gemessen, 2 CPU-Kerne): Sofortsuche p50 4 ms / p95 6 ms nacheinander, p95 ≈ 40 ms bei 10 gleichzeitigen Anfragen mit 4 Prozessen; fertige Lektion aus Sicht von Karo ≈ 9 ms. `kcteam bench` misst das bei dir. Mehr Abonnenten: `KCTEAM_API_WORKERS` erhöhen, der Agent skaliert getrennt davon.
+
+**Webhooks** (für andere Abnehmer; Karo fragt im Job-Takt nach): `kcteam api-client add --name app --webhook https://…` – Ereignisse `lesson.finished` und `request.updated`, signiert mit `X-Curriculum-Signature: t=…,v1=<HMAC-SHA256>` (Prüfen: `kcteam.webhooks.verify`).
+
+```bash
+kcteam api                          # API ohne Docker (127.0.0.1:8088)
+kcteam api-client list | revoke --name karo
+kcteam bench -n 500 -c 10           # Latenz messen
+```
+
+---
+
+## Datenbank-Browser (nur lesen)
+
+Eine kleine Oberfläche für **beide** Datenbanken: das Curriculum (Postgres) und Karos Katalog (SQLite).
+
+```bash
+# ADMIN_PASSWORD in .env setzen, dann
+docker compose --profile admin up -d      # http://127.0.0.1:8090  (Benutzer: admin)
+```
+
+- **Curriculum:** Fächer → Themenblöcke → Konzepte (Suche, Filter nach Stand), Konzeptseite mit Voraussetzungen, Fehlvorstellungen, Bild-Erklärungen, Aufgaben und Prüfprotokoll; Aufträge, Lektionen für Abnehmer, offene menschliche Prüfungen (dringende zuerst), Nachfrage, Abnehmer.
+- **Karo:** Lernkatalog mit Herkunft (`curriculum` = vom Dienst geliefert), Konzeptseite mit Fehlertypen, erkennbaren falschen Antworten, Aufgaben und Hilfe.
+- **Alle Tabellen** beider Datenbanken mit Suche und Seiten.
+
+Sicherheit: startet nicht ohne Passwort, nur auf 127.0.0.1, Postgres-Sitzungen `READ ONLY`, Karos Datei `mode=ro` und schreibgeschützt gemountet, Spalten mit Geheimnissen (Passwort, Token, Schlüssel-Hash …) werden nie angezeigt, keine externen Skripte (strenge CSP). Entscheidungen der menschlichen Prüfung bleiben bewusst im Terminal (`kcteam review …`).
 
 ---
 
@@ -383,7 +441,7 @@ Als Datei-Alternative: `kcteam export -s Mathematik` schreibt pro Themenblock ei
 ```bash
 TEST_DATABASE_URL=postgresql://user@localhost:5432/testdb pytest -q
 ```
-Achtung: Die Tests löschen die Schemas `curriculum`, `karo` und `learner` in dieser Datenbank. Sie decken den ganzen Ablauf mit dem Mock-Provider ab: Veto mit Korrektur, Sperre nach 3 Runden, menschliche Freigabe, erneuter Lauf ohne Mehrkosten, Lernpfad, Nur-Lese-Rolle, Export, alle Visual-Typen, SVG-Sicherheit, Klassenauswahl, Nachrüsten von Visuals, alle Fachprofile, Antwortauswertung und simulierte Kinder auf allen Niveaus (stark, schwach, Fehlvorstellung, einzelne Lücke, Überspringen, Freitext, Wiederkehr), Rollen und Löschung, hängende Sitzungen, Schutz freigegebener Konzepte bei Kritik und Neustrukturierung, Kritiker-Ausfall, abbrechbare Wartezeiten sowie der Curriculum-Agent (finden, anderes Niveau, beauftragen, zusammenlegen, auch gleichzeitig, Veto und menschliche Freigabe, Kopierschutz, Datenschutz, Limit, Wiederaufnahme nach Absturz) und die SQLite-Kopie für das Karo-MVP.
+Achtung: Die Tests löschen die Schemas `curriculum`, `karo` und `learner` in dieser Datenbank. Sie decken den ganzen Ablauf mit dem Mock-Provider ab: Veto mit Korrektur, Sperre nach 3 Runden, menschliche Freigabe, erneuter Lauf ohne Mehrkosten, Lernpfad, Nur-Lese-Rolle, Export, alle Visual-Typen, SVG-Sicherheit, Klassenauswahl, Nachrüsten von Visuals, alle Fachprofile, Antwortauswertung und simulierte Kinder auf allen Niveaus (stark, schwach, Fehlvorstellung, einzelne Lücke, Überspringen, Freitext, Wiederkehr), Rollen und Löschung, hängende Sitzungen, Schutz freigegebener Konzepte bei Kritik und Neustrukturierung, Kritiker-Ausfall, abbrechbare Wartezeiten sowie der Curriculum-Agent (finden, anderes Niveau, beauftragen, zusammenlegen, auch gleichzeitig, Veto und menschliche Freigabe, Kopierschutz, Datenschutz, Limit, Wiederaufnahme nach Absturz) die SQLite-Kopie für das Karo-MVP, die HTTP-API (Schlüssel, Idempotenz, Lektionen im Karo-Format inkl. Veto, Wartezustand und Verwerfen durch den Abnehmer, Webhook-Signatur) und der Datenbank-Browser (Passwort, nur lesen, Geheimnisse ausgeblendet).
 
 ## Anpassen
 

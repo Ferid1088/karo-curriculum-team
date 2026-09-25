@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}{{ c.title }}{% endblock %}
+{% block main %}
+<div class="crumbs"><a href="/">Übersicht</a> / <a href="/curriculum/subjects/{{ c.subject_code }}">{{ c.subject_code }}</a> / {{ c.block_id }}</div>
+<h1>{{ c.title }} <span class="pill s-{{ c.status }}">{{ c.status }}</span></h1>
+<p>{{ c.description }}</p>
+<div class="grid">
+  <div class="card"><h3>Voraussetzungen</h3>{% for p in pre %}<div><a href="/curriculum/concepts/{{ p.id }}">{{ p.title }}</a> <span class="pill s-{{ p.status }}">{{ p.status }}</span></div>{% else %}<span class="muted">keine</span>{% endfor %}</div>
+  <div class="card"><h3>Baut darauf auf</h3>{% for p in post %}<div><a href="/curriculum/concepts/{{ p.id }}">{{ p.title }}</a></div>{% else %}<span class="muted">nichts</span>{% endfor %}</div>
+  <div class="card"><h3>Lektionen für Abnehmer</h3>{% for e in exports %}<div><a href="/curriculum/exports/{{ e.id }}">#{{ e.id }}</a> {{ e.format_id }} Kl. {{ e.grade }} <span class="pill s-{{ e.status }}">{{ e.status }}</span></div>{% else %}<span class="muted">keine</span>{% endfor %}</div>
+</div>
+<h2>Fehlvorstellungen</h2>
+{% for m in mis %}<div class="card" style="margin-bottom:8px"><b>{{ m.key }}</b> – {{ m.description }}{% if m.remediation_hint %}<div class="small muted">Abhilfe: {{ m.remediation_hint }}</div>{% endif %}</div>{% else %}<p class="muted">keine</p>{% endfor %}
+{% if visuals %}<h2>Bild-Erklärungen</h2>
+{% for v in visuals %}<h3>{{ v.purpose }} <span class="muted small">{{ v.level }}{% if v.misconception_id %} · {{ v.misconception_id }}{% endif %}</span></h3>
+<div class="visual">{% for st in v.steps %}<figure>{% set u = st.svg|svg_uri %}{% if u %}<img src="{{ u }}" alt="{{ st.caption }}">{% endif %}<figcaption>{{ loop.index }}. {{ st.caption }}</figcaption></figure>{% endfor %}</div>
+{% endfor %}{% endif %}
+<h2>Aufgaben ({{ items|length }})</h2>
+<div class="scroll"><table><thead><tr><th>Art</th><th>Niveau</th><th>Aufgabe</th><th>Lösung</th><th>Antwort (auswertbar)</th><th>Bild</th></tr></thead><tbody>
+{% for i in items %}<tr><td><span class="pill">{{ i.kind }}</span></td><td>{{ i.level }}</td><td>{{ i.prompt }}</td><td>{{ i.solution }}</td>
+<td class="small">{{ i.answer|short(60) }}</td><td>{% set u = i.visual_svg|svg_uri %}{% if u %}<img src="{{ u }}" alt="" style="width:120px;background:#fff;border-radius:6px">{% endif %}</td></tr>
+{% endfor %}</tbody></table></div>
+<h2>Prüfprotokoll</h2>
+<div class="scroll"><table><thead><tr><th>Zeit</th><th>Station</th><th>Prüfer</th><th>Entscheidung</th><th>Runde</th><th>Befunde</th></tr></thead><tbody>
+{% for r in reviews %}<tr><td class="small">{{ r.created_at.strftime('%d.%m. %H:%M') }}</td><td>{{ r.stage }}</td><td>{{ r.reviewer }}</td><td><span class="pill s-{{ r.decision }}">{{ r.decision }}</span></td><td>{{ r.round }}</td><td class="small">{{ r.findings|short(140) }}</td></tr>
+{% else %}<tr><td colspan="6" class="muted">—</td></tr>{% endfor %}</tbody></table></div>
+<details><summary>Alle Felder</summary><div class="kv" style="margin-top:10px">{% for k, v in fields.items() %}<div>{{ k }}</div><div>{% if v is mapping or (v is iterable and v is not string) %}<pre>{{ v|pretty }}</pre>{% else %}{{ v|pretty }}{% endif %}</div>{% endfor %}</div></details>
+{% endblock %}

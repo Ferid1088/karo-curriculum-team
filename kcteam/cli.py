@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 import time
 from pathlib import Path
@@ -491,6 +492,76 @@ def cmd_demand(cfg, args) -> int:
     return 0
 
 
+def cmd_api(cfg, args) -> int:
+    import uvicorn
+    db = DB(cfg.database_url)
+    db.migrate()
+    db.close_all()
+    print(f"▶ Curriculum-Service auf http://{args.host}:{args.port}  (Doku: /docs)")
+    uvicorn.run("kcteam.api:create_app", factory=True, host=args.host, port=args.port, workers=args.workers,
+                log_level="warning", access_log=False, proxy_headers=False)
+    return 0
+
+
+def cmd_api_client(cfg, args) -> int:
+    from .api import add_client, list_clients, revoke_client
+    db = DB(cfg.database_url)
+    db.migrate()
+    if args.action == "add":
+        if not args.name:
+            raise ValueError("--name fehlt")
+        row, key = add_client(db, args.name, args.tenant or args.name, args.webhook, key=args.key)
+        print(f"✓ Abnehmer {row['name']} (Einrichtung {row['tenant']}) angelegt.")
+        print(f"  Schlüssel (wird nur jetzt angezeigt):  {key}")
+        if row["webhook_secret"]:
+            print(f"  Webhook-Geheimnis:                   {row['webhook_secret']}")
+        print("  In Karo: KARO_CURRICULUM_KEY=<Schlüssel> setzen.")
+    elif args.action == "revoke":
+        print("✓ gesperrt" if revoke_client(db, args.name) else "✗ nicht gefunden")
+    else:
+        for r in list_clients(db):
+            print(f"#{r['id']:<3} {r['name']:20} {r['tenant']:16} {r['key_prefix']}…  "
+                  f"{'aktiv' if r['active'] else 'gesperrt':8} zuletzt: {r['last_used_at'] or '–'}")
+    return 0
+
+
+def cmd_admin(cfg, args) -> int:
+    import uvicorn
+    if not os.environ.get("ADMIN_PASSWORD"):
+        print("✗ ADMIN_PASSWORD ist nicht gesetzt – die Oberfläche startet nicht ohne Passwort.")
+        return 1
+    print(f"▶ Datenbank-Browser auf http://{args.host}:{args.port}  (Benutzer: admin)")
+    uvicorn.run("kcteam.admin:create_app", factory=True, host=args.host, port=args.port, log_level="warning")
+    return 0
+
+
+def cmd_bench(cfg, args) -> int:
+    """Latenz der Sofortsuche messen (so, wie Karo den Dienst aufruft)."""
+    import statistics
+    from concurrent.futures import ThreadPoolExecutor
+
+    import httpx
+    topics = args.topic or ["Brüche addieren", "Ungleichnamige Brüche", "Einmaleins", "Terme", "Prozentrechnung"]
+    headers = {"Authorization": f"Bearer {args.key or os.environ.get('KARO_CURRICULUM_KEY', '')}"}
+    with httpx.Client(base_url=args.url, headers=headers, timeout=10) as http:
+        def one(i):
+            t = time.perf_counter()
+            r = http.post("/v1/resolve", json={"subject": args.subject, "grade": args.grade,
+                                                "topic": topics[i % len(topics)]})
+            return (time.perf_counter() - t) * 1000, r.status_code
+        one(0)
+        t0 = time.perf_counter()
+        with ThreadPoolExecutor(args.concurrency) as ex:
+            res = list(ex.map(one, range(args.n)))
+        wall = time.perf_counter() - t0
+    ms = sorted(r[0] for r in res)
+    errors = sum(1 for r in res if r[1] >= 400)
+    p = lambda q: ms[min(len(ms) - 1, int(q * len(ms)))]  # noqa: E731
+    print(f"{args.n} Anfragen, {args.concurrency} parallel: p50 {statistics.median(ms):.1f} ms · p95 {p(0.95):.1f} ms · "
+          f"p99 {p(0.99):.1f} ms · {args.n / wall:.0f}/s · Fehler {errors}")
+    return 0 if p(0.95) < args.target and not errors else 2
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="kcteam", description="Karo Curriculum Team")
     parser.add_argument("--config", help="Pfad zu config.yaml")
@@ -559,6 +630,32 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--days", type=int, default=90)
     p.add_argument("--limit", type=int, default=30)
 
+    p = sub.add_parser("api", help="Curriculum-Service über HTTP (für Karo und andere Abnehmer)")
+    p.add_argument("--host", default=os.environ.get("KCTEAM_API_HOST", "127.0.0.1"))
+    p.add_argument("--port", type=int, default=int(os.environ.get("KCTEAM_API_PORT", "8088")))
+    p.add_argument("--workers", type=int, default=int(os.environ.get("KCTEAM_API_WORKERS", "1")))
+
+    p = sub.add_parser("api-client", help="Abnehmer (API-Schlüssel) verwalten")
+    p.add_argument("action", choices=["add", "list", "revoke"])
+    p.add_argument("--name")
+    p.add_argument("--tenant", help="Einrichtung (Tageslimit, Nachfrage); Standard: der Name")
+    p.add_argument("--webhook", help="URL für Webhooks (optional)")
+    p.add_argument("--key", help="eigenen Schlüssel vorgeben (kc_…, mind. 32 Zeichen), sonst wird einer erzeugt")
+
+    p = sub.add_parser("admin", help="Datenbank-Browser (nur lesen) für Curriculum und Karo")
+    p.add_argument("--host", default=os.environ.get("ADMIN_HOST", "127.0.0.1"))
+    p.add_argument("--port", type=int, default=int(os.environ.get("ADMIN_PORT", "8090")))
+
+    p = sub.add_parser("bench", help="Latenz des Curriculum-Service messen")
+    p.add_argument("--url", default=os.environ.get("KARO_CURRICULUM_URL", "http://127.0.0.1:8088"))
+    p.add_argument("--key")
+    p.add_argument("--subject", default="Mathematik")
+    p.add_argument("--grade", type=int, default=6)
+    p.add_argument("--topic", action="append")
+    p.add_argument("-n", type=int, default=300)
+    p.add_argument("--concurrency", "-c", type=int, default=10)
+    p.add_argument("--target", type=float, default=50, help="Ziel für p95 in ms")
+
     sub.add_parser("providers", help="eingerichtete KI-Zugänge anzeigen")
     sub.add_parser("init-db", help="Datenbankschema anlegen")
 
@@ -570,7 +667,8 @@ def main(argv: list[str] | None = None) -> int:
     handlers = {"run": cmd_run, "status": cmd_status, "review": cmd_review, "export": cmd_export,
                 "providers": cmd_providers, "init-db": cmd_init_db, "preview": cmd_preview,
                 "catalog": cmd_catalog, "subjects": cmd_subjects, "check": cmd_check, "simulate": cmd_simulate,
-                "serve": cmd_serve, "request": cmd_request, "export-sqlite": cmd_export_sqlite, "requests": cmd_requests, "demand": cmd_demand}
+                "serve": cmd_serve, "request": cmd_request, "export-sqlite": cmd_export_sqlite, "requests": cmd_requests, "demand": cmd_demand,
+                "api": cmd_api, "api-client": cmd_api_client, "admin": cmd_admin, "bench": cmd_bench}
     try:
         return handlers[cmd](cfg, args)
     except psycopg.OperationalError as exc:

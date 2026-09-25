@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}Karo Datenbanken{% endblock %}</title>
+<style>
+:root{--bg:#f7f7f5;--panel:#fff;--ink:#1d1f23;--muted:#666b73;--line:#e3e3df;--accent:#2d6cdf;--accent-soft:#e8f0fd;
+--ok:#1f8a4c;--warn:#b7791f;--bad:#c53030;--code:#f1f1ee;--radius:10px;
+font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;font-size:15px;color-scheme:light}
+@media (prefers-color-scheme:dark){:root{--bg:#15171a;--panel:#1d2024;--ink:#e8e9eb;--muted:#9aa0a8;--line:#2e3238;
+--accent:#7aa7ff;--accent-soft:#1f2b40;--ok:#4cc38a;--warn:#e3b341;--bad:#ff7b72;--code:#23272c;color-scheme:dark}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);line-height:1.45}
+a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
+header{position:sticky;top:0;z-index:5;background:var(--panel);border-bottom:1px solid var(--line)}
+.bar{max-width:1280px;margin:0 auto;padding:10px 16px;display:flex;gap:18px;align-items:center;flex-wrap:wrap}
+.brand{font-weight:700;letter-spacing:.2px;color:var(--ink)}
+nav{display:flex;gap:4px;flex-wrap:wrap}nav a{padding:6px 10px;border-radius:8px;color:var(--muted)}
+nav a.on,nav a:hover{background:var(--accent-soft);color:var(--accent);text-decoration:none}
+.sep{width:1px;height:20px;background:var(--line)}
+main{max-width:1280px;margin:0 auto;padding:20px 16px 60px}
+h1{font-size:22px;margin:4px 0 14px}h2{font-size:17px;margin:26px 0 10px}h3{font-size:15px;margin:16px 0 6px}
+.muted{color:var(--muted)}.small{font-size:13px}
+.grid{display:grid;gap:14px;grid-template-columns:repeat(auto-fill,minmax(230px,1fr))}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:14px 16px}
+.card .big{font-size:26px;font-weight:700}.card h3{margin-top:0}
+table{width:100%;border-collapse:collapse;background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden}
+th,td{text-align:left;padding:7px 10px;border-bottom:1px solid var(--line);vertical-align:top;font-size:14px}
+th{background:var(--code);font-weight:600;white-space:nowrap;position:sticky;top:0}
+tr:last-child td{border-bottom:0}tbody tr:hover{background:var(--accent-soft)}
+.scroll{overflow:auto;max-width:100%;border-radius:var(--radius)}
+.pill{display:inline-block;padding:1px 8px;border-radius:99px;font-size:12px;font-weight:600;background:var(--code);color:var(--muted);white-space:nowrap}
+.s-approved,.s-ready,.s-done,.s-found{background:rgba(31,138,76,.15);color:var(--ok)}
+.s-blocked,.s-failed,.s-rejected,.s-unavailable,.s-retired{background:rgba(197,48,48,.14);color:var(--bad)}
+.s-queued,.s-running,.s-waiting,.s-structured,.s-calibrated,.s-diagnosed,.s-visualized,.s-pending{background:rgba(183,121,31,.15);color:var(--warn)}
+pre{background:var(--code);padding:10px 12px;border-radius:8px;overflow:auto;font-size:12.5px;margin:6px 0;max-height:420px}
+code{background:var(--code);padding:1px 5px;border-radius:5px;font-size:13px}
+form.filter{display:flex;gap:8px;margin:0 0 14px;flex-wrap:wrap}
+input,select,button{font:inherit;padding:7px 10px;border:1px solid var(--line);border-radius:8px;background:var(--panel);color:var(--ink)}
+input[type=search]{min-width:260px}button{background:var(--accent);color:#fff;border-color:transparent;cursor:pointer}
+.kv{display:grid;grid-template-columns:200px 1fr;gap:4px 14px}.kv div:nth-child(odd){color:var(--muted)}
+.visual{display:flex;gap:12px;overflow-x:auto;padding:4px 0}.visual figure{margin:0;min-width:220px;max-width:300px}
+.visual img{width:100%;background:#fff;border:1px solid var(--line);border-radius:8px}
+.visual figcaption{font-size:13px;color:var(--muted);margin-top:4px}
+details{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:10px 14px;margin:8px 0}
+summary{cursor:pointer;font-weight:600}.pager{display:flex;gap:10px;align-items:center;margin:12px 0}
+.note{background:var(--accent-soft);border-radius:8px;padding:8px 12px;margin-bottom:14px;font-size:14px}
+.crumbs{font-size:13px;color:var(--muted);margin-bottom:4px}
+</style>
+</head>
+<body>
+<header><div class="bar">
+  <a class="brand" href="/">Karo · Datenbanken</a>
+  <nav>
+    {% set p = request.url.path %}
+    <a href="/" class="{{ 'on' if p == '/' }}">Übersicht</a>
+    <span class="sep"></span>
+    <a href="/curriculum/requests" class="{{ 'on' if p.startswith('/curriculum/requests') }}">Aufträge</a>
+    <a href="/curriculum/exports" class="{{ 'on' if p.startswith('/curriculum/exports') }}">Lektionen</a>
+    <a href="/curriculum/queue" class="{{ 'on' if p.startswith('/curriculum/queue') }}">Prüfung</a>
+    <a href="/curriculum/demand" class="{{ 'on' if p.startswith('/curriculum/demand') }}">Nachfrage</a>
+    <a href="/curriculum/clients" class="{{ 'on' if p.startswith('/curriculum/clients') }}">Abnehmer</a>
+    <a href="/tables/curriculum" class="{{ 'on' if p.startswith('/tables/curriculum') }}">Tabellen</a>
+    <span class="sep"></span>
+    <a href="/karo" class="{{ 'on' if p.startswith('/karo') }}">Karo-Katalog</a>
+    <a href="/tables/karo" class="{{ 'on' if p.startswith('/tables/karo') }}">Karo-Tabellen</a>
+  </nav>
+  <span class="muted small" style="margin-left:auto">nur lesen</span>
+</div></header>
+<main>{% block main %}{% endblock %}</main>
+</body>
+</html>

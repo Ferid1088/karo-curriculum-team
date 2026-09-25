@@ -39,6 +39,8 @@ roles:
     Kategorie). Tod, Leid, Schuld behutsam und altersgerecht.
   curriculum_agent: >
     Bekenntnisfrei und respektvoll benennen; bei Religion die Konfession des Fachs beachten. Persönliche Glaubensfragen an das Kind sind kein Konzept.
+  lektionsautor: >
+    Bekenntnissensibel, respektvoll, ohne das Kind nach eigenem Glauben zu fragen.
 difficulty_parameters:
   abstraktion: erzählung | begriff | theorie
   perspektiven: Anzahl der Perspektiven

@@ -16,6 +16,8 @@ roles:
   kinderrechts_inspektor: Allgemeine Regeln streng anwenden.
   curriculum_agent: >
     Ordne über die Aufgaben zu, nicht über die Überschrift. Im Zweifel ein vorhandenes, etwas größeres Konzept wählen statt ein fast gleiches neues anzulegen.
+  lektionsautor: >
+    Halte dich eng an Konzept, Niveaus und Fehlvorstellungen aus dem Curriculum; lieber schlicht als ausgeschmückt.
 difficulty_parameters:
   fachbegriffe_neu: neue Fachbegriffe
   abstraktion: konkret | begrifflich | theoretisch

@@ -172,11 +172,12 @@ class SubjectTeam:
         if role in ("visual_didaktiker", "kritiker"):
             lines.append("Bevorzugte Visual-Typen: " + ", ".join(f.visual_types))
         if f.sensitive_topics and role in ("kinderrechts_inspektor", "kritiker", "fachdidaktiker", "diagnostiker",
-                                           "niveau_kalibrierer", "visual_didaktiker", "curriculum_agent"):
+                                           "niveau_kalibrierer", "visual_didaktiker", "curriculum_agent",
+                                           "lektionsautor"):
             lines.append("### Sensible Themen\n" + "\n".join(f"- {t.topic}: {t.rule}" for t in f.sensitive_topics))
         if f.not_in_app:
             lines.append(f"Nicht in der App möglich (keine Konzepte/Aufgaben dazu erzeugen): {f.not_in_app}")
-        if f.example and role in ("fachdidaktiker", "niveau_kalibrierer", "diagnostiker"):
+        if f.example and role in ("fachdidaktiker", "niveau_kalibrierer", "diagnostiker", "lektionsautor"):
             lines.append(f"### Beispiel aus dem Fach (Format-Orientierung)\n{f.example.strip()}")
         if self.generic:
             lines.append("Hinweis: Für dieses Fach gibt es kein eigenes Profil – besonders sorgfältig recherchieren.")

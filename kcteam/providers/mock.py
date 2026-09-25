@@ -71,6 +71,25 @@ def _num(v) -> dict:
     return {"type": "number", "value": v}
 
 
+def _fill(schema: dict):
+    """Minimales Objekt, das ein (einfaches) JSON-Schema erfüllt."""
+    t = schema.get("type")
+    if "enum" in schema:
+        return schema["enum"][0]
+    if t == "object":
+        props = schema.get("properties") or {}
+        return {k: _fill(props.get(k, {"type": "string"})) for k in schema.get("required", list(props))}
+    if t == "array":
+        return [_fill(schema.get("items") or {"type": "string"}) for _ in range(schema.get("minItems", 1))]
+    if t == "integer":
+        return schema.get("minimum", 1)
+    if t == "number":
+        return schema.get("minimum", 1)
+    if t == "boolean":
+        return True
+    return "Beispieltext"
+
+
 class MockProvider(Provider):
     def __init__(self, settings: dict):
         super().__init__(name="mock", settings=settings)
@@ -254,6 +273,72 @@ class MockProvider(Provider):
         out["concepts"] = [{"id": f"{bid}.{slug}", "title": topic, "description": f"Das Kind kann: {topic}.",
                             "first_contact_grade": max(1, g - 1), "target_grade": g, "prerequisites": pre}]
         return out
+
+    def _lektionsautor(self, meta):
+        """Lektion im Format des Abnehmers. Für das Karo-Format eine vollständige, nachgerechnete Lektion,
+        sonst ein Objekt, das das mitgeschickte Schema minimal erfüllt. „Wette“ im Thema -> Inspektor lehnt ab."""
+        p = meta.get("payload", {})
+        schema = meta.get("json_schema") or {}
+        fb = meta.get("feedback") or ""
+        if "fehlertypen" not in (schema.get("properties") or {}):
+            return _fill(schema)
+        k = p["konzept"]
+        g = p["klasse"]
+        topic = p.get("thema_des_abnehmers") or k["title"]
+        wette = "Wette" in topic and ("immer" in topic or "Glücksspiel" not in fb)
+        reg = {r["component"] for r in meta.get("registry") or []}
+        comp = "GenericStepFlow" if "GenericStepFlow" in reg or not reg else sorted(reg)[0]
+        vis = {"component": comp, "parameters": {"schritte": ["Schau genau hin", "Rechne Schritt für Schritt"]}
+               if comp == "GenericStepFlow" else {}, "animation": "none"}
+        mis = p.get("fehlvorstellungen") or []
+        mis = (mis + [{"key": "verwechselt", "beschreibung": "verwechselt die Rechenart",
+                       "bekannte_falsche_antworten": ["1"]}] * 2)[:max(2, min(4, len(mis)))]
+
+        def aufgabe(a, b, rolle, extra=""):
+            d = {"frage": f"Was ist {a} + {b}?{extra}", "loesung": str(a + b), "tipps": ["Zähle weiter."]}
+            if rolle in ("gefuehrt", "selbststaendig"):
+                d["typischer_fehler"] = str(a * b if a * b != a + b else a + b + 1)
+            if rolle in ("vorhersage", "transfer"):
+                d["optionen"] = [str(a + b), str(a + b + 1)]
+                d["aufloesung"] = f"{a} + {b} = {a + b}, weil man {b} weiterzählt."
+            return d
+
+        fehler = []
+        for i, m in enumerate(mis):
+            fehler.append({
+                "key": re.sub(r"[^a-z0-9]+", "-", str(m["key"]).lower()).strip("-") + (f"-{i}" if i else ""),
+                "label": str(m["beschreibung"])[:60] or "Fehlvorstellung",
+                "beschreibung": str(m["beschreibung"]),
+                "antworten": [str(a) for a in (m.get("bekannte_falsche_antworten") or ["1"])][:6] or ["1"],
+                "erklaerung": {"haken": "Viele Kinder rechnen hier zu schnell.",
+                               "erkenntnis": "Beim Zusammenzählen wird die Menge größer und nie kleiner.",
+                               "regel": "2 + 3 = 5",
+                               "bild": {"zeigt": "zwei Gruppen von Punkten", "bewegt": "die Gruppen rücken zusammen",
+                                        "bleibt_gleich": "die Anzahl aller Punkte bleibt immer gleich"},
+                               "aufgabe": {"frage": "Was ist 2 + 2?", "loesung": "4"}},
+                "visualisierung": vis,
+                "aufgaben": {"vorhersage": aufgabe(1, 2, "vorhersage"),
+                             "beispiel": aufgabe(2, 3, "beispiel"),
+                             "gefuehrt": aufgabe(3, 4, "gefuehrt"),
+                             "selbststaendig": aufgabe(4, 5, "selbststaendig"),
+                             "transfer": aufgabe(5, 6, "transfer", " Stell dir 5 Äpfel und 6 Birnen vor." if not wette
+                                                 else " Wette mit deinem Freund um Geld.")},
+            })
+        hilfe = {ph: {"text": f"Noch einmal anders erklärt ({ph.lower()}): Schritt für Schritt.", "visualisierung": vis}
+                 for ph in ("HOOK", "RULE", "WORKED_EXAMPLE", "GUIDED_TASK", "INDEPENDENT_TASK", "ADAPTATION")}
+        slug = re.sub(r"[^a-z0-9]+", "-", k["id"].lower()).strip("-")
+        return {
+            "konzept": {"konzept_key": slug, "thema_key": slug.split("-")[1] if "-" in slug else slug,
+                        "label": k["title"], "klasse_von": min(k.get("first_contact_grade") or g, g),
+                        "klasse_bis": g, "stichworte": [k["title"]]},
+            "erstkontakt": {"anker": "Du hast 2 Stifte und bekommst 1 dazu. Wie viele hast du?",
+                            "erste_aufgabe": {"frage": "Was ist 2 + 1?", "loesung": "3"},
+                            "benennung": k["title"]},
+            "fehlertypen": fehler,
+            "hilfe": hilfe,
+            "faq": [{"frage": "Warum wird es mehr?", "antwort": "Weil etwas dazukommt."},
+                    {"frage": "Darf ich zählen?", "antwort": "Ja, Zählen hilft am Anfang."}],
+        }
 
     def _kinderrechts_inspektor(self, meta):
         content = json.dumps(meta.get("payload", {}).get("inhalt", {}), ensure_ascii=False)
