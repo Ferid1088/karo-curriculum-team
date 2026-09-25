@@ -492,6 +492,16 @@ def cmd_demand(cfg, args) -> int:
     return 0
 
 
+def cmd_rerender(cfg, args) -> int:
+    from .sqlite_export import auto_export
+    db = DB(cfg.database_url)
+    db.migrate()
+    steps, items = db.rerender_visuals()
+    print(f"✓ neu gezeichnet: {steps} Bildschritte, {items} visuelle Aufgaben")
+    auto_export(cfg, db, print)
+    return 0
+
+
 def cmd_api(cfg, args) -> int:
     import uvicorn
     db = DB(cfg.database_url)
@@ -630,6 +640,8 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--days", type=int, default=90)
     p.add_argument("--limit", type=int, default=30)
 
+    sub.add_parser("rerender-visuals", help="alle gespeicherten Bilder mit dem aktuellen Renderer neu zeichnen")
+
     p = sub.add_parser("api", help="Curriculum-Service über HTTP (für Karo und andere Abnehmer)")
     p.add_argument("--host", default=os.environ.get("KCTEAM_API_HOST", "127.0.0.1"))
     p.add_argument("--port", type=int, default=int(os.environ.get("KCTEAM_API_PORT", "8088")))
@@ -668,7 +680,7 @@ def main(argv: list[str] | None = None) -> int:
                 "providers": cmd_providers, "init-db": cmd_init_db, "preview": cmd_preview,
                 "catalog": cmd_catalog, "subjects": cmd_subjects, "check": cmd_check, "simulate": cmd_simulate,
                 "serve": cmd_serve, "request": cmd_request, "export-sqlite": cmd_export_sqlite, "requests": cmd_requests, "demand": cmd_demand,
-                "api": cmd_api, "api-client": cmd_api_client, "admin": cmd_admin, "bench": cmd_bench}
+                "api": cmd_api, "rerender-visuals": cmd_rerender, "api-client": cmd_api_client, "admin": cmd_admin, "bench": cmd_bench}
     try:
         return handlers[cmd](cfg, args)
     except psycopg.OperationalError as exc:

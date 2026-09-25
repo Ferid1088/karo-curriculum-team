@@ -132,3 +132,64 @@ def test_backfill_visuals_keeps_concept_visible(env):
     c = db.concept("MA.ZAHLEN.ZR100")
     assert c["status"] == "approved" and c["visuals"] is not None
     assert db.query("SELECT 1 FROM karo.visual_explanations WHERE concept_id='MA.ZAHLEN.ZR100'")
+
+
+# ---------------------------------------------------------------- Lesbarkeit (Beschriftungen passen)
+_LESBAR = {
+    "blatt": {"type": "flow_diagram", "title": "Licht trifft ein Blatt", "alt": "Licht wird zu Wärme und Energie",
+              "direction": "horizontal",
+              "nodes": [{"id": "a", "label": "Licht trifft grünes Blatt"}, {"id": "b", "label": "Wärme"},
+                        {"id": "c", "label": "chemische Energie im Traubenzucker"}, {"id": "d", "label": "Wachstum"}],
+              "edges": [{"source": "a", "target": "b", "label": "ein Teil"},
+                        {"source": "a", "target": "c", "label": "wird"},
+                        {"source": "c", "target": "d", "label": "später genutzt"}]},
+    "alle": {"type": "flow_diagram", "title": "Alle Lebewesen atmen", "alt": "Menschen, Tiere und Pflanzen atmen",
+             "direction": "horizontal",
+             "nodes": [{"id": "o", "label": "Sauerstoff (O2) aus der Luft"}, {"id": "m", "label": "Mensch"},
+                       {"id": "t", "label": "Tier"}, {"id": "p", "label": "Pflanze"},
+                       {"id": "c", "label": "Kohlenstoffdioxid (CO2) in die Luft"}],
+             "edges": [{"source": "o", "target": x, "label": "nimmt auf"} for x in "mtp"]
+             + [{"source": x, "target": "c", "label": "gibt ab"} for x in "mtp"]},
+    "tabelle": {"type": "table", "title": "Wer ist ein Lebewesen?", "alt": "Vergleich Hund, Pflanze, Stein",
+                "headers": ["Merkmal", "Hund", "Pflanze", "Stein"],
+                "rows": [["wächst", "ja", "ja", "nein"],
+                         ["nimmt etwas auf – womit?", "Futter, mit dem Maul", "Wasser, mit den Wurzeln", "nichts"],
+                         ["bekommt Nachkommen", "ja", "ja (Samen)", "nein"]],
+                "highlight_cells": [[1, 2], [2, 2]]},
+    "zyklus": {"type": "cycle", "title": "Der Wasserkreislauf", "alt": "Kreislauf des Wassers",
+               "nodes": ["Wasser verdunstet über dem Meer", "Wolken entstehen", "Regen und Schnee fallen",
+                         "Wasser fließt zurück ins Meer"],
+               "arrow_labels": ["steigt auf", "kühlt ab", "versickert", "Sonne wärmt"],
+               "center_label": "Sonne liefert Energie"},
+}
+
+
+@pytest.mark.parametrize("name", list(_LESBAR))
+def test_labels_fit_and_do_not_overlap(name):
+    import re
+    from kcteam.visuals.render import layout_problems, render
+    svg = render(_LESBAR[name])
+    assert layout_problems(svg) == []
+    # kein Kasten ragt über den Rand
+    vw = float(re.search(r'viewBox="0 0 ([\d.]+)', svg)[1])
+    for x, w in re.findall(r'<rect x="([-\d.]+)" y="[-\d.]+" width="([\d.]+)"', svg):
+        assert float(x) >= -0.5 and float(x) + float(w) <= vw + 0.5
+    # kein Text wird abgeschnitten: jedes Wort der Vorlage steht im Bild
+    spec = _LESBAR[name]
+    shown = [spec["title"], spec.get("center_label") or ""] + spec.get("arrow_labels", []) + spec.get("headers", [])
+    shown += [n["label"] for n in spec.get("nodes", []) if isinstance(n, dict)] + \
+        [n for n in spec.get("nodes", []) if isinstance(n, str)]
+    shown += [e.get("label") or "" for e in spec.get("edges", [])] + [c for r in spec.get("rows", []) for c in r]
+    text = "".join(re.findall(r">([^<]*)</text>", svg)).replace("-", "").replace(" ", "")
+    for w in re.findall(r"\w+", " ".join(shown)):
+        assert w in text, (w, text)
+
+
+def test_audit_reports_overlaps():
+    from kcteam.visuals.render import layout_problems
+    bad = ('<svg viewBox="0 0 100 50"><text x="10" y="20" font-size="14" font-weight="normal" fill="#000" '
+           'text-anchor="start" dominant-baseline="auto">Sehr langer Text läuft hinaus</text>'
+           '<text x="12" y="22" font-size="14" font-weight="normal" fill="#000" text-anchor="start" '
+           'dominant-baseline="auto">drüber</text></svg>')
+    probs = layout_problems(bad)
+    assert any("Bildrand" in p for p in probs) and any("überdecken" in p for p in probs)

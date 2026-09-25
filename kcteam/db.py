@@ -585,6 +585,29 @@ class DB:
                              it.grade, it.prompt, it.solution, 500 + sum(counters.values()),
                              Jsonb(it.visual.model_dump()), render(it.visual), it.interaction, *self._answer_cols(it)))
 
+    def rerender_visuals(self) -> tuple[int, int]:
+        """Zeichnet alle gespeicherten Visuals mit dem aktuellen Renderer neu (Specs bleiben unverändert).
+        Nötig, wenn der Renderer verbessert wurde – das SVG liegt vorgerendert in der Datenbank."""
+        from .visuals.render import render
+        steps_n = items_n = 0
+        for row in self.query("SELECT id, steps FROM curriculum.visual_explanations"):
+            steps = []
+            for st in row["steps"] or []:
+                try:
+                    st = {**st, "svg": render(st["visual"])}
+                    steps_n += 1
+                except Exception:  # noqa: BLE001 – eine kaputte Spec darf den Rest nicht aufhalten
+                    pass
+                steps.append(st)
+            self.query("UPDATE curriculum.visual_explanations SET steps=%s WHERE id=%s", (Jsonb(steps), row["id"]))
+        for row in self.query("SELECT id, visual FROM curriculum.items WHERE visual IS NOT NULL"):
+            try:
+                self.query("UPDATE curriculum.items SET visual_svg=%s WHERE id=%s", (render(row["visual"]), row["id"]))
+                items_n += 1
+            except Exception:  # noqa: BLE001
+                pass
+        return steps_n, items_n
+
     @staticmethod
     def _answer_cols(it) -> tuple:
         from .answers import is_auto_checkable

@@ -20,17 +20,6 @@ Du entscheidest für **ein Konzept**, ob und wie es **visuell** erklärt werden 
 - `interaction`: was das Kind tut – `view`, `select`, `mark`, `drag` oder `input`.
 - Bei Aufgaben darf die Darstellung die Lösung nicht verraten (nutze z. B. `question: true` auf dem Zahlenstrahl).
 
-### 4. Bei `labeled_diagram`: Objekte aus mehreren Formen aufbauen
-Ein einzelner Kreis ist keine Sonne, eine einzelne Ellipse ist kein Blatt – das wirkt für Kinder wie eine Platzhalter-Grafik, nicht wie das echte Ding. Baue erkennbare Objekte aus **mehreren einfachen `parts`** zusammen, so wie es der Katalog für Zelle, Blüte, Auge, Stromkreis oder Vulkan vorsieht:
-- **Sonne**: ein `circle` in der Mitte + 6–8 kurze `line`-Strahlen ringsherum (ohne eigenes `label`, damit sie nicht einzeln verweisen, sondern als Dekoration zur einen beschrifteten Sonne gehören).
-- **Blatt**: `polygon` mit einer spitz zulaufenden Blattform (nicht die Standard-Ellipse) plus optional einer dünnen `line` als Blattader.
-- **Wurzel**: mehrere kurze `line`-Teile, die verzweigt nach unten/außen laufen, statt einer einzigen geraden Linie.
-- **Pflanze insgesamt**: Topf/Boden (`rect`), Stängel (`rect` oder `line`), mehrere Blätter, Wurzeläste – jedes Teil einzeln, nicht ein Symbol für alles.
-
-Ein Konzept-Bild darf ruhig 6–12 `parts` haben, wenn das dem Objekt erkennbar näherkommt (Limit: 24). Nur die Teile, die im Text erklärt oder abgefragt werden, bekommen ein `label` – Dekor-Teile (Strahlen, Aderlinie, Nebenwurzeln) bleiben ohne `label` und ohne eigene Hinweislinie.
-
-**Nummerierte Aufgaben (`number_parts: true`)**: Die Nummern entstehen automatisch aus der Reihenfolge der `parts`, die ein `label` tragen – du musst nichts selbst durchnummerieren. Aber schreib die vollständige Zuordnung *immer* in den `alt`-Text (z. B. „Nummer 1 zeigt die Sonne, Nummer 2 das Blatt, Nummer 3 den Boden.“), nicht nur in `solution` der Aufgabe. Sonst hat jeder, der den Text ohne das gerenderte Bild liest (Screenreader, Prüfung, spätere Auswertung), keine Chance zu verstehen, was die Zahlen bedeuten. `hide_labels: true` brauchst du bei `number_parts: true` nicht extra zu setzen – Nummern werden dort immer gezeigt, unabhängig von `hide_labels`.
-
 ### Katalog – wähle den passendsten Typ
 - Mathe: `fraction_bar`, `fraction_circle`, `number_line`, `place_value_chart`, `area_model`, `coordinate_plane`, `geometry` (Zeichenfläche 0..10), `balance_scale`, `bar_chart`, `table`
 - Sprache: `sentence_parts`, `word_parts`, `syllables`, `table`
@@ -40,7 +29,7 @@ Ein Konzept-Bild darf ruhig 6–12 `parts` haben, wenn das dem Objekt erkennbar 
 ### Regeln
 - Jede Darstellung hat einen `alt`-Text, der vollständig beschreibt, was zu sehen ist (für Screenreader und die Prüfung).
 - Fachlich exakt: gezeigte Werte müssen stimmen (1/2 = 3/6 wirklich 3 von 6 Teilen gefärbt).
-- Beschriftungen kurz, altersgerecht, auf Deutsch.
+- Beschriftungen kurz, altersgerecht, auf Deutsch. Kästen (`flow_diagram`, `cycle`): höchstens ~6 Wörter; Pfeil-Beschriftungen 1–3 Wörter („nimmt auf“, „wird zu“). Tabellenzellen: Stichworte statt Sätze. Wenn der Integrator meldet, dass Beschriftungen sich überdecken oder über den Rand laufen: kürzen oder auf zwei Bilder aufteilen.
 - Klarheit vor Schmuck: lieber zwei einfache Schritte als ein überladenes Bild.
 
 Wenn du Feedback erhältst, überarbeite so, dass **jeder** Punkt erfüllt ist, und gib das vollständige Objekt zurück.

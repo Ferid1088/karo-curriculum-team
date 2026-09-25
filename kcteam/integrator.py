@@ -207,9 +207,23 @@ def check_diagnostics(concept: dict, diag: Diagnostics, min_auto: int = 2) -> li
     return errors
 
 
+#: Darstellungen, deren Beschriftungen automatisch auf Überlappung und Rand geprüft werden
+AUDITED = {"flow_diagram", "table", "cycle"}
+
+
 def check_visuals(concept: dict, vset, misconception_keys: set[str]) -> list[str]:  # noqa: C901
     """Prüft die Ausgabe des Visual-Didaktikers: Bedarf, Verweise, Niveaus und ob jede Darstellung zeichenbar ist."""
-    from .visuals.render import render
+    from .visuals.render import layout_problems, render
+
+    def drawable(visual, where: str) -> None:
+        try:
+            svg = render(visual)
+        except Exception as exc:  # noqa: BLE001
+            errors.append(f"{where}: Darstellung nicht zeichenbar ({exc}).")
+            return
+        if getattr(visual, "type", "") in AUDITED:
+            for p in layout_problems(svg):
+                errors.append(f"{where}: Beschriftung nicht lesbar – {p}. Kürzer formulieren oder aufteilen.")
 
     vset.concept_id = concept["id"]
     t = concept["target_grade"]
@@ -231,18 +245,12 @@ def check_visuals(concept: dict, vset, misconception_keys: set[str]) -> list[str
             errors.append(f"explanations[{i}].for_misconception '{e.for_misconception}' gibt es nicht "
                           f"(vorhanden: {sorted(misconception_keys) or 'keine'}).")
         for k, step in enumerate(e.steps):
-            try:
-                render(step.visual)
-            except Exception as exc:  # noqa: BLE001
-                errors.append(f"explanations[{i}].steps[{k}]: Darstellung nicht zeichenbar ({exc}).")
+            drawable(step.visual, f"explanations[{i}].steps[{k}]")
     for i, it in enumerate(vset.visual_items):
         if it.use == "exit" and (it.level != "target" or it.grade != t):
             errors.append(f"visual_items[{i}] (exit) muss level 'target' und grade {t} haben.")
         if it.use in ("diagnostic", "exit") and it.level == "above":
             errors.append(f"visual_items[{i}]: Diagnose/Abschluss nicht über dem Zielniveau.")
         errors += check_answer(it, f"visual_items[{i}]", misconception_keys, required=it.use != "practice")
-        try:
-            render(it.visual)
-        except Exception as exc:  # noqa: BLE001
-            errors.append(f"visual_items[{i}]: Darstellung nicht zeichenbar ({exc}).")
+        drawable(it.visual, f"visual_items[{i}]")
     return errors
