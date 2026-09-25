@@ -1,0 +1,63 @@
+id: fremdsprache
+label: Moderne Fremdsprachen
+level_axis: learning_year
+overview: >
+  Niveau richtet sich nach Lernjahr und GER-Stufe (pre-A1 … C1), nicht nach der Klasse. target_grade wird aus dem
+  typischen Beginn berechnet (Startklasse + Lernjahr − 1); zusätzlich immer learning_year und cefr angeben, damit
+  Karo auf andere Startklassen umrechnen kann.
+structure: >
+  Funktionale kommunikative Kompetenz: Hörverstehen, Leseverstehen, Sprechen, Schreiben, Sprachmittlung.
+  Verfügbarkeit sprachlicher Mittel: Wortschatz, Grammatik, Aussprache/Intonation, Orthografie.
+  Interkulturelle kommunikative Kompetenz, Text- und Medienkompetenz, Sprachlernkompetenz.
+  Grobe Zuordnung 1. Fremdsprache: Ende Kl. 4 ≈ A1, Kl. 6 ≈ A2, Kl. 10 ≈ B1, Abitur ≈ B2 (eA B2/C1).
+  2. Fremdsprache: Lernjahr 2 ≈ A1, Lernjahr 4 ≈ A2, Lernjahr 5–6 ≈ A2/B1, Abitur ≈ B1/B2.
+roles:
+  curriculum_analyst: >
+    Blöcke nach Lernjahr und kommunikativem Bereich (z. B. „Lernjahr 1: sich vorstellen – Verben im Präsens“,
+    „Lernjahr 3: über Vergangenes berichten – Vergangenheitszeiten“), plus eigene Blöcke für Grammatik-Progression
+    und Wortschatzfelder. grade_min/grade_max aus Startklasse und Lernjahren berechnen.
+  fachdidaktiker: >
+    Jedes Konzept verbindet eine Kommunikationsabsicht mit den nötigen sprachlichen Mitteln. Grammatik aufbauend
+    (Präsens vor Vergangenheit, regelmäßig vor unregelmäßig). Wortschatz in thematischen Feldern. learning_year und
+    cefr bei JEDEM Konzept ausfüllen.
+  niveau_kalibrierer: >
+    Parameter: Lernjahr, GER-Stufe, erlaubte Zeitformen, erlaubte Satzstrukturen, Wortschatzumfang (bekannte Wörter),
+    Textlänge, Anteil Zielsprache in der Aufgabenstellung (Lernjahr 1–2 Aufgabenstellung auf Deutsch, danach
+    zunehmend in der Zielsprache).
+  diagnostiker: >
+    Typische Fehler: Transfer aus dem Deutschen (Wortstellung, false friends), Übergeneralisierung von Regeln
+    (goed, allé mit avoir), Verwechslung ähnlicher Formen, fehlende Kongruenz. text-Antworten mit allen korrekten
+    Varianten (Kurzformen, Groß-/Kleinschreibung); typische falsche Formen als distractors. Keine Hör- oder
+    Sprechaufgaben (keine Audio-Ausgabe) – stattdessen Lesen, Schreiben, Wortschatz, Grammatik, Sprachmittlung.
+  visual_didaktiker: >
+    Tabellen für Konjugation/Deklination, word_parts für Wortbildung, sentence_parts für Satzbau (auch im Vergleich
+    zum Deutschen), labeled_diagram für Wortschatz zu Räumen/Körper/Kleidung, timeline für Zeitformen.
+  kritiker: >
+    Prüfe: Ist jede Zielsprachen-Form korrekt (Akzente, Sonderzeichen)? Passen Wortschatz und Zeitformen zum Lernjahr?
+    Sind alle korrekten Antwortvarianten erfasst? Ist die Aufgabenstellung in der passenden Sprache?
+  kinderrechts_inspektor: >
+    Keine Stereotype über Länder, Völker oder Menschen, die die Sprache sprechen; Landeskunde vielfältig und aktuell.
+    Rollenspiele/Dialoge ohne Klischees. Keine Aufforderung, persönliche Daten in der Fremdsprache anzugeben
+    (fiktive Figuren für „sich vorstellen“ nutzen).
+  curriculum_agent: >
+    Ordne nach Lernjahr und GER-Stufe zu, nicht nach Klasse allein. Vokabellisten zeigen das Wortfeld, Lückentexte das Grammatikphänomen (z. B. simple past vs. present perfect). learning_year und cefr bei neuen Konzepten angeben.
+difficulty_parameters:
+  lernjahr: 1–9
+  cefr: pre-A1 | A1 | A2 | B1 | B2 | C1
+  zeitformen: erlaubte Zeitformen
+  satzstrukturen: Hauptsatz | Nebensatz | Relativsatz | …
+  wortschatz_umfang: ungefähre Zahl bekannter Wörter
+  textlaenge_woerter: Länge eines Lesetextes
+  aufgabensprache: deutsch | gemischt | zielsprache
+answer_types: [text, choice, match, order, free_text]
+visual_types: [table, word_parts, sentence_parts, labeled_diagram, timeline]
+sensitive_topics:
+  - topic: Landeskunde
+    rule: Keine Pauschalurteile über Länder oder Menschen; politische Konflikte nur sachlich und altersgerecht.
+not_in_app: Hörverstehen und Sprechen mit Audio, Aussprachetraining.
+min_auto_checkable: 2
+example: |
+  Konzept EN.PRESENT.THIRD_PERSON_S „3. Person Singular im simple present“, learning_year 2 (Start Kl. 3 → Kl. 4), cefr A1.
+  {"prompt": "Complete: My sister ___ (play) football on Mondays.", "solution": "plays", "level": "target", "grade": 4,
+   "answer": {"type": "text", "accepted": ["plays"]},
+   "distractors": [{"answer": "play", "misconception": "F1", "feedback": "he/she/it – das s muss mit!"}]}

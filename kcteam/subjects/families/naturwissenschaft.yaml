@@ -1,0 +1,65 @@
+id: naturwissenschaft
+label: Naturwissenschaften (Biologie, Chemie, Physik)
+level_axis: grade
+overview: >
+  Wissen ist stärker vernetzt als in Mathe; Voraussetzungen sind oft Modelle und Grundbegriffe (Teilchenmodell,
+  Energie, Zelle). Schülervorstellungen sind gut erforscht und sehr hartnäckig – Diagnostik und Erklärungen setzen
+  genau dort an.
+structure: >
+  Kompetenzbereiche (KMK): Sachkompetenz (Fachwissen), Erkenntnisgewinnungskompetenz (Beobachten, Hypothesen,
+  Experimentieren, Modelle), Kommunikationskompetenz, Bewertungskompetenz. Basiskonzepte je Fach (siehe
+  Besonderheiten des Fachs). Oberstufe gA/eA.
+roles:
+  curriculum_analyst: >
+    Blöcke nach Themenfeldern des Fachs und Basiskonzepten; die spiralförmige Wiederkehr (z. B. Energie in Kl. 6, 8, 10)
+    als getrennte Blöcke mit steigendem Abstraktionsgrad. Erkenntnisgewinnung (Experimentieren, Diagramme auswerten)
+    als eigene Blöcke.
+  fachdidaktiker: >
+    Ebenen trennen: Phänomen → Modell → formale Beschreibung (Formel/Symbol). Modellkonzepte (Teilchenmodell,
+    Stromkreis-Modell, Zelle) sind Voraussetzungen vieler anderer. Vorwissen aus dem Sachunterricht als eigene
+    Einstiegskonzepte im eigenen Fach (Ziel Kl. 3–4) anlegen – keine Verweise auf andere Fächer.
+  niveau_kalibrierer: >
+    Parameter: Anzahl neuer Fachbegriffe, Abstraktionsgrad (phänomen | modell | formal), Mathematisierung (keine |
+    Je-desto | Proportionalität | Formel umstellen | Funktionen), Anzahl verknüpfter Systemebenen, Größen und Einheiten.
+  diagnostiker: >
+    Nutze belegte Schülervorstellungen des Fachs (siehe Besonderheiten). Aufgaben zu Phänomenen („Was passiert,
+    wenn …?“) mit choice-Optionen, die genau diese Vorstellungen abbilden. Rechenaufgaben als number mit Einheit und
+    Toleranz. Beschriftungsaufgaben als mark auf labeled_diagram (value = part_id). Begründungen zusätzlich free_text.
+  visual_didaktiker: >
+    labeled_diagram (Zelle, Organ, Blüte, Stromkreis, Versuchsaufbau, Teilchenmodell als Kreise), flow_diagram
+    (Abläufe, Nahrungsketten, Reaktionsschritte), cycle (Stoffkreisläufe, Entwicklungszyklen), coordinate_plane und
+    bar_chart (Messwerte, Diagramme auswerten), table (Messwerttabellen), geometry (Strahlengang in der Optik).
+    Teilchenebene und Stoffebene in getrennten Schritten zeigen.
+  kritiker: >
+    Prüfe fachliche Richtigkeit streng (Einheiten, Vorzeichen, Fachbegriffe, Modellgrenzen benannt). Vermischt eine
+    Erklärung Stoff- und Teilchenebene? Bestärkt eine Formulierung eine Fehlvorstellung (z. B. „Strom wird verbraucht“)?
+  kinderrechts_inspektor: >
+    Experimente nur ungefährlich (Haushaltsmittel, kein offenes Feuer, keine Chemikalien, kein Netzstrom) und
+    immer mit Sicherheitshinweis und dem Hinweis, dass ein Erwachsener dabei ist. Keine Anleitungen zu gefährlichen
+    Stoffen oder Waffen, auch nicht „zur Warnung“. Mensch-/Körperthemen sachlich, keine Bewertung von Körpern.
+  curriculum_agent: >
+    Ordne nach Basiskonzept und Themenfeld zu (z. B. Stoffteilchen, Energie, Zelle). Experimentieranleitungen zeigen das Konzept dahinter; gefährliche Versuche selbst sind nie Inhalt.
+difficulty_parameters:
+  fachbegriffe_neu: Anzahl neuer Fachbegriffe
+  abstraktion: phänomen | modell | formal
+  mathematisierung: keine | je_desto | proportional | formel | funktion
+  systemebenen: Anzahl verknüpfter Ebenen (Zelle–Organ–Organismus–Ökosystem)
+  groessen: vorkommende Größen und Einheiten
+answer_types: [choice, number, mark, order, match, text, free_text]
+visual_types: [labeled_diagram, flow_diagram, cycle, coordinate_plane, bar_chart, table, geometry]
+sensitive_topics:
+  - topic: Experimente
+    rule: Nur gefahrlose Versuche mit Sicherheitshinweis; im Zweifel als Gedankenexperiment oder Auswertung vorgegebener Messwerte.
+  - topic: Sexualerziehung, Sucht, Krankheit, Tod
+    rule: Sachlich, altersgerecht, ohne explizite Inhalte, ohne Fragen nach eigener Erfahrung oder Gesundheit.
+  - topic: Evolution, Klimawandel
+    rule: Wissenschaftlicher Konsens; keine Scheinkontroversen, aber respektvoll gegenüber Weltanschauungen.
+not_in_app: Echte Experimente und Mikroskopieren (Karo kann Versuche beschreiben, Messwerte auswerten lassen und Aufbauten zeigen).
+min_auto_checkable: 2
+example: |
+  Konzept PH.ELEKTRIZITAET.STROMKREIS_GESCHLOSSEN „Geschlossener Stromkreis“, Ziel Klasse 6.
+  {"prompt": "Eine Lampe ist mit nur EINEM Kabel an die Batterie angeschlossen. Leuchtet sie?",
+   "solution": "Nein – der Strom braucht einen geschlossenen Kreis (Hin- und Rückweg).", "level": "target", "grade": 6,
+   "answer": {"type": "choice", "options": [
+      {"text": "Ja, ein Kabel reicht, der Strom fließt zur Lampe und wird dort verbraucht.", "misconception": "F1"},
+      {"text": "Nein, es braucht einen geschlossenen Kreis von der Batterie zur Lampe und zurück.", "correct": true}]}}

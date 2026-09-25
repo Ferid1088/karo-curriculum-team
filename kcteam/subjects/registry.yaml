@@ -1,0 +1,375 @@
+# Fächerregister: alle Fächer an allgemeinbildenden Schulen in Deutschland, Klasse 1–13.
+# grades   = Klassen, in denen das Fach typischerweise unterrichtet wird (über Länder hinweg)
+# family   = Fächergruppe -> Datei families/<family>.yaml (Expertenanweisungen, Beispiele)
+# start_grade (nur Sprachen) = typischer Beginn; daraus wird das Lernjahr berechnet
+# notes / role_extra = Besonderheiten dieses Fachs zusätzlich zur Fächergruppe
+
+subjects:
+  # ------------------------------------------------------------------ Kernfächer
+  - id: mathematik
+    name: Mathematik
+    code: MA
+    aliases: [mathe, math, mathematics]
+    family: mathematik
+    grades: [1, 13]
+
+  - id: deutsch
+    name: Deutsch
+    code: DE
+    aliases: [deutschunterricht, german]
+    family: deutsch
+    grades: [1, 13]
+
+  - id: sachunterricht
+    name: Sachunterricht
+    code: SU
+    aliases: [hsu, heimat- und sachunterricht, heimat und sachunterricht, mensch natur kultur, mnk, sachkunde]
+    family: sachunterricht
+    grades: [1, 4]
+
+  # ------------------------------------------------------------------ Moderne Fremdsprachen
+  - id: englisch
+    name: Englisch
+    code: EN
+    aliases: [english]
+    family: fremdsprache
+    grades: [1, 13]
+    start_grade: 3
+    notes: >
+      Beginn je nach Land in Klasse 1 oder 3 (Standard hier: 3). Grundschule: spielerisch, mündlich geprägt,
+      Schriftbild nur unterstützend. Ab Klasse 5 systematischer Aufbau. Ende Sek I ≈ B1, Abitur ≈ B2 (gA) bzw. B2/C1 (eA).
+    role_extra:
+      diagnostiker: >
+        Typische Fehler: fehlendes 3rd-person -s, do-Umschreibung fehlt ("I not like"), deutsche Wortstellung,
+        false friends (become/bekommen, gift/Gift, actual/aktuell), since/for, Aussprache-Schreibung (th, w/v).
+      niveau_kalibrierer: >
+        Zeitformen-Progression als Parameter: simple present → present progressive → simple past → going-to-future
+        → present perfect → will-future → past progressive → past perfect → conditional → passive → reported speech.
+
+  - id: franzoesisch
+    name: Französisch
+    code: FR
+    aliases: [französisch, francais, französich, french]
+    family: fremdsprache
+    grades: [5, 13]
+    start_grade: 6
+    notes: >
+      Meist 2. Fremdsprache ab Klasse 6 (teils 5 oder 7; im Saarland schon Grundschule). Genus (le/la), Akzente,
+      Liaison. Ende Sek I ≈ A2/B1, Abitur ≈ B1/B2.
+    role_extra:
+      diagnostiker: >
+        Antworten: Akzente als Lernziel prüfen, aber eine Variante ohne Akzent als distractor mit eigener
+        Fehlvorstellung anlegen. Typische Fehler: Genus, être/avoir im passé composé, Angleichung des participe passé,
+        Verneinung ne…pas, faux amis.
+
+  - id: spanisch
+    name: Spanisch
+    code: ES
+    aliases: [spanish, espanol, español]
+    family: fremdsprache
+    grades: [6, 13]
+    start_grade: 6
+    notes: >
+      2. Fremdsprache ab Klasse 6 oder 7, 3. Fremdsprache ab 8, neu einsetzend in der Oberstufe (Klasse 11). Standard
+      hier: Beginn Klasse 6 – Karo kann über das Lernjahr auf andere Startklassen umrechnen. ser/estar, ¿ ¡, Akzente.
+    role_extra:
+      diagnostiker: >
+        Typische Fehler: ser/estar, gustar-Konstruktion, Genus, Akzente (está/esta), pretérito indefinido vs
+        imperfecto, subjuntivo-Auslöser, Verwechslung mit Italienisch/Französisch.
+
+  - id: italienisch
+    name: Italienisch
+    code: IT
+    aliases: [italian, italiano]
+    family: fremdsprache
+    grades: [6, 13]
+    start_grade: 6
+
+  - id: russisch
+    name: Russisch
+    code: RU
+    aliases: [russian]
+    family: fremdsprache
+    grades: [5, 13]
+    start_grade: 6
+    notes: >
+      Kyrillische Schrift: Anfangsunterricht beginnt mit dem Alphabet. Antworten in Kyrillisch; wo Tastatur fehlt,
+      zusätzlich die wissenschaftliche Transliteration als akzeptierte Variante. Kasus-System, Aspekt der Verben.
+
+  - id: tuerkisch
+    name: Türkisch
+    code: TR
+    aliases: [türkisch, turkish]
+    family: fremdsprache
+    grades: [5, 13]
+    start_grade: 6
+    notes: >
+      Oft herkunftssprachlicher Unterricht mit sehr unterschiedlichem Vorwissen: Diagnostik muss auch hohe
+      mündliche Kompetenz bei schwacher Schriftsprache erkennen. Vokalharmonie, agglutinierende Endungen.
+
+  - id: niederlaendisch
+    name: Niederländisch
+    code: NL
+    aliases: [niederländisch, dutch, hollaendisch]
+    family: fremdsprache
+    grades: [5, 13]
+    start_grade: 7
+
+  - id: polnisch
+    name: Polnisch
+    code: PL
+    aliases: [polish]
+    family: fremdsprache
+    grades: [5, 13]
+    start_grade: 7
+
+  - id: chinesisch
+    name: Chinesisch
+    code: ZH
+    aliases: [chinese, mandarin]
+    family: fremdsprache
+    grades: [7, 13]
+    start_grade: 8
+    notes: >
+      Schriftzeichen und Pinyin mit Tönen. Antworten: Zeichen und Pinyin (mit Tonzeichen oder Tonziffern) als
+      akzeptierte Varianten. Töne sind ohne Audio nur über Pinyin prüfbar.
+
+  # ------------------------------------------------------------------ Alte Sprachen
+  - id: latein
+    name: Latein
+    code: LA
+    aliases: [latin, lateinisch]
+    family: alte_sprache
+    grades: [5, 13]
+    start_grade: 6
+    notes: Beginn Klasse 5, 6 oder 7 (Standard 6). Latinum meist nach 4–5 Lernjahren.
+
+  - id: altgriechisch
+    name: Altgriechisch
+    code: GR
+    aliases: [griechisch, greek, ancient greek]
+    family: alte_sprache
+    grades: [8, 13]
+    start_grade: 8
+    notes: Griechisches Alphabet zuerst; Antworten in griechischer Schrift, Transliteration als Variante akzeptieren.
+
+  # ------------------------------------------------------------------ Naturwissenschaften
+  - id: biologie
+    name: Biologie
+    code: BI
+    aliases: [bio, biology]
+    family: naturwissenschaft
+    grades: [5, 13]
+    notes: >
+      Themen: Lebewesen (Pflanzen, Tiere, Mensch), Körper und Gesundheit, Ökologie, Zellbiologie, Stoffwechsel,
+      Genetik, Evolution, Neurobiologie, Immunbiologie; Oberstufe mit gA/eA. Basiskonzepte: System, Struktur und
+      Funktion, Entwicklung (bzw. Stoff- und Energieumwandlung, Information und Kommunikation, Reproduktion,
+      Variabilität und Angepasstheit). Vorwissen aus dem Sachunterricht als eigene Einstiegskonzepte (Kl. 3–4).
+    role_extra:
+      diagnostiker: >
+        Belegte Schülervorstellungen: Pflanzen holen Nahrung aus dem Boden; nur Tiere atmen; Evolution ist
+        zielgerichtet („die Giraffe streckte den Hals“); Blut ist in Venen blau; Gene = Merkmale 1:1;
+        Viren sind Lebewesen wie Bakterien; Energie wird „verbraucht“.
+      kinderrechts_inspektor: >
+        Sexualerziehung: nur in der dafür vorgesehenen Klassenstufe (meist 4–6 Grundlagen, 7–9 vertiefend), sachliche
+        Fachsprache, keine expliziten Darstellungen, Vielfalt von Familien und Identitäten respektvoll und ohne Wertung,
+        keine Fragen nach eigener Erfahrung. Sucht/Drogen nur präventiv-sachlich. Tierversuche, Krankheit und Tod sachlich.
+
+  - id: chemie
+    name: Chemie
+    code: CH
+    aliases: [chemistry]
+    family: naturwissenschaft
+    grades: [7, 13]
+    notes: >
+      Beginn Klasse 7 oder 8. Themen: Stoffe und Stoffeigenschaften, Teilchenmodell, chemische Reaktion, Atombau und
+      PSE, Bindungen, Säuren und Basen, Redox, Energetik, organische Chemie, Kunststoffe; Oberstufe gA/eA.
+      Basiskonzepte: Stoff-Teilchen, Struktur-Eigenschaft, chemische Reaktion, Energie. Stoff- vs. Teilchenebene
+      strikt unterscheiden.
+    role_extra:
+      diagnostiker: >
+        Belegte Fehlvorstellungen: Teilchen haben die Eigenschaften des Stoffs (Teilchen sind warm, farbig, dehnen
+        sich aus); bei Verbrennung verschwindet Stoff; Lösen = Reagieren; Salz „verschwindet“ in Wasser; Atome sind
+        kleine Kugeln mit Farbe. Formeln als text-Antwort mit akzeptierten Schreibweisen (H2O, H₂O).
+      kinderrechts_inspektor: >
+        Keine Anleitungen mit gefährlichen Stoffen, keine Hinweise zur Herstellung von Explosivstoffen, Giften oder
+        Drogen – auch nicht „zur Warnung“. Versuche nur mit Haushaltsmitteln und nur mit Sicherheitshinweis.
+
+  - id: physik
+    name: Physik
+    code: PH
+    aliases: [physics]
+    family: naturwissenschaft
+    grades: [5, 13]
+    notes: >
+      Beginn je nach Land Klasse 5–7. Themen: Mechanik, Optik, Akustik, Wärmelehre, Elektrizitätslehre, Magnetismus,
+      Energie, Atom- und Kernphysik, Oberstufe: Felder, Schwingungen und Wellen, Quantenphysik, Relativität (gA/eA).
+      Basiskonzepte: Energie, Materie, Wechselwirkung, System. Größen immer mit Einheit.
+    role_extra:
+      diagnostiker: >
+        Belegte Fehlvorstellungen: Bewegung braucht dauernd Kraft; schwere Körper fallen schneller; Strom wird im
+        Verbraucher verbraucht; Kälte ist ein Stoff; Sehen: Strahlen gehen vom Auge aus; Schatten ist etwas
+        Stoffliches. Zahlantworten mit Toleranz und Einheit; falsche Einheit als eigener distractor.
+
+  - id: naturwissenschaften
+    name: Naturwissenschaften
+    code: NW
+    aliases: [nawi, naturwissenschaft, nwa, naturphänomene, naturwissenschaftlicher unterricht]
+    family: naturwissenschaft
+    grades: [5, 10]
+    notes: Integriertes Fach (je nach Land/Schulform, z. B. NaWi 5/6, NwA, NW an Gesamtschulen) mit Bio-, Chemie- und Physik-Anteilen.
+
+  - id: informatik
+    name: Informatik
+    code: IF
+    aliases: [computer science, medienbildung und informatik, digitale welt, informatik und medien]
+    family: informatik
+    grades: [5, 13]
+
+  # ------------------------------------------------------------------ Gesellschaftswissenschaften
+  - id: geschichte
+    name: Geschichte
+    code: GE
+    aliases: [history, geschichtsunterricht]
+    family: gesellschaft
+    grades: [5, 13]
+    notes: >
+      Beginn meist Klasse 6 (teils 5 oder 7). Chronologischer Durchgang: Ur- und Frühgeschichte, Antike, Mittelalter,
+      Frühe Neuzeit, Revolutionen, 19. Jh., Weltkriege, NS-Diktatur und Holocaust, Nachkriegszeit, deutsche Teilung
+      und Einheit, Europa und Welt. Historisches Denken: Quelle vs. Darstellung, Perspektivität, Sach- und Werturteil.
+    role_extra:
+      kinderrechts_inspektor: >
+        NS-Zeit und Holocaust erst ab Klasse 9 vertieft (vorher höchstens altersgerecht angebahnt), würdevolle
+        Darstellung der Opfer, keine Reproduktion von Propaganda oder Symbolen verfassungswidriger Organisationen
+        (§ 86a StGB) außer als eindeutig eingeordnetes Unterrichtsmaterial, keine Gewaltdetails. Krieg nie als
+        spannende Kulisse.
+
+  - id: erdkunde
+    name: Erdkunde
+    code: EK
+    aliases: [geographie, geografie, geography, erdkundeunterricht]
+    family: gesellschaft
+    grades: [5, 13]
+    notes: >
+      Themen: Orientierung und Karten, Planet Erde, Landschaftszonen, Klima und Wetter, Naturgefahren, Landwirtschaft,
+      Stadt und Raumplanung, Bevölkerung und Migration, Wirtschaftsräume, Globalisierung, Nachhaltigkeit, Europa und
+      Deutschland. Hinweis: ein Karten-Visual fehlt noch – bis dahin labeled_diagram (schematisch) und table.
+
+  - id: politik
+    name: Politik
+    code: PO
+    aliases: [sozialkunde, gemeinschaftskunde, politik und wirtschaft, powi, sowi, sozialwissenschaften,
+              politische bildung, gesellschaftslehre, gesellschaftskunde, wirtschaft und politik]
+    family: gesellschaft
+    grades: [5, 13]
+    notes: >
+      Themen: Zusammenleben und Regeln, Kinderrechte, Demokratie und Mitbestimmung, Grundgesetz und Grundrechte,
+      Staatsorgane, Wahlen, Parteien, Medien, Rechtsstaat, Europäische Union, internationale Politik, Sozialstaat.
+      Beutelsbacher Konsens ist verbindlich.
+
+  - id: wirtschaft
+    name: Wirtschaft
+    code: WI
+    aliases: [wbs, wirtschaft-berufs- und studienorientierung, arbeitslehre, wirtschaftslehre, ökonomie, oekonomie,
+              verbraucherbildung, alltagskultur ernährung soziales, aes]
+    family: gesellschaft
+    grades: [7, 13]
+    notes: >
+      Themen: Bedürfnisse und Knappheit, Haushalt und Taschengeld, Markt und Preis, Unternehmen, Arbeit und Beruf,
+      Geld und Banken, Verbraucherschutz, Wirtschaftspolitik, Globalisierung, Nachhaltigkeit. Keine Finanz- oder
+      Anlageempfehlungen, keine echten Marken.
+
+  - id: paedagogik
+    name: Pädagogik
+    code: PA
+    aliases: [pädagogik, erziehungswissenschaft]
+    family: gesellschaft
+    grades: [11, 13]
+    notes: "Oberstufe: Erziehung, Sozialisation, Entwicklung (Piaget, Erikson), Lernen, Identität. Keine Aufforderung zur Selbstanalyse oder Diagnose."
+
+  - id: psychologie
+    name: Psychologie
+    code: PS
+    aliases: [psychology]
+    family: gesellschaft
+    grades: [11, 13]
+    notes: >
+      Oberstufe: Wahrnehmung, Lernen, Gedächtnis, Motivation, Sozialpsychologie, Entwicklung. Psychische
+      Erkrankungen nur sachlich-wissenschaftlich, keine Selbsttests oder Aufforderungen zur Selbstdiagnose.
+
+  # ------------------------------------------------------------------ Religion / Ethik / Philosophie
+  - id: religion_evangelisch
+    name: Evangelische Religion
+    code: RE
+    aliases: [evangelische religion, ev religion, ev. religion, religion evangelisch, evangelischer religionsunterricht]
+    family: religion_ethik
+    grades: [1, 13]
+    notes: Konfessioneller Unterricht nach Art. 7 Abs. 3 GG aus evangelischer Perspektive, mit ökumenischer und interreligiöser Offenheit.
+
+  - id: religion_katholisch
+    name: Katholische Religion
+    code: RK
+    aliases: [katholische religion, kath religion, kath. religion, religion katholisch, katholischer religionsunterricht]
+    family: religion_ethik
+    grades: [1, 13]
+    notes: Konfessioneller Unterricht nach Art. 7 Abs. 3 GG aus katholischer Perspektive, mit ökumenischer und interreligiöser Offenheit.
+
+  - id: religion_islamisch
+    name: Islamische Religion
+    code: RI
+    aliases: [islamische religion, islamischer religionsunterricht, islamunterricht, islamkunde]
+    family: religion_ethik
+    grades: [1, 13]
+    notes: Bekenntnisorientierter islamischer Religionsunterricht (je nach Land), innerislamische Vielfalt beachten.
+
+  - id: religion_juedisch
+    name: Jüdische Religion
+    code: RJ
+    aliases: [jüdische religion, juedische religion, jüdischer religionsunterricht]
+    family: religion_ethik
+    grades: [1, 13]
+
+  - id: ethik
+    name: Ethik
+    code: ET
+    aliases: [werte und normen, praktische philosophie, ler, lebensgestaltung-ethik-religionskunde, philosophieren mit kindern]
+    family: religion_ethik
+    grades: [1, 13]
+    notes: Bekenntnisfreies Fach (Name je nach Land). Philosophieren mit Kindern in der Grundschule, später Ethik, Religionskunde, Anthropologie.
+
+  - id: philosophie
+    name: Philosophie
+    code: PHI
+    aliases: [philosophy]
+    family: religion_ethik
+    grades: [10, 13]
+    notes: "Oberstufe: Erkenntnistheorie, Ethik, Anthropologie, Staatsphilosophie, Sprachphilosophie; Argumentationsanalyse."
+
+  # ------------------------------------------------------------------ Ästhetische Fächer, Sport, Technik
+  - id: kunst
+    name: Kunst
+    code: KU
+    aliases: [bildende kunst, art, kunsterziehung, bk]
+    family: kunst
+    grades: [1, 13]
+
+  - id: musik
+    name: Musik
+    code: MU
+    aliases: [music, musikunterricht]
+    family: musik
+    grades: [1, 13]
+
+  - id: sport
+    name: Sport
+    code: SP
+    aliases: [sportunterricht, sporttheorie, pe, physical education]
+    family: sport
+    grades: [1, 13]
+
+  - id: technik
+    name: Technik
+    code: TC
+    aliases: [technology, werken, technisches werken, natur und technik, nut]
+    family: technik
+    grades: [5, 10]

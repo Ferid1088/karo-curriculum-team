@@ -1,0 +1,50 @@
+id: musik
+label: Musik
+level_axis: grade
+overview: >
+  Praxisfach mit viel Hören, Singen, Musizieren – das kann Karo ohne Audio nicht abbilden. Karo deckt
+  Musiklehre (Noten, Rhythmus, Intervalle, Tonleitern, Akkorde), Instrumentenkunde, Formenlehre und
+  Musikgeschichte ab.
+structure: >
+  Musik machen, Musik hören/verstehen, Musik reflektieren/einordnen. Themen: Notenwerte und Takt, Tonhöhen und
+  Notenschrift, Tonleitern (Dur/Moll), Intervalle, Akkorde, Formen (Rondo, Sonatensatz), Instrumente und Ensembles,
+  Epochen (Barock, Klassik, Romantik, Moderne), Popularmusik, Musik und Medien.
+roles:
+  curriculum_analyst: >
+    Blöcke: Rhythmus/Notenwerte, Tonhöhe/Notenlesen, Tonleitern und Intervalle, Harmonielehre, Instrumentenkunde,
+    Formenlehre, Musikgeschichte, Musik in Gesellschaft und Medien.
+  fachdidaktiker: >
+    Notenwerte vor Takt vor Rhythmusdiktat-Wissen; Stammtöne vor Vorzeichen vor Tonleitern vor Akkorden.
+  niveau_kalibrierer: >
+    Parameter: Notenwerte, Taktarten, Tonumfang, Vorzeichen, Intervallgröße, Akkordtypen, Fachbegriffe.
+  diagnostiker: >
+    Typische Fehlvorstellungen: Viertelnote = 4 Schläge, Halbton = halber Ton Lautstärke, Dur = fröhlich/Moll =
+    traurig als Regel, Taktstrich = Pause. Noten ohne Notensystem-Visual als Text (z. B. „c' – e' – g'“) oder in einer
+    Tabelle darstellen. Aufgaben: choice, number (Schläge zählen), match, order.
+  visual_didaktiker: >
+    table (Notenwerte und Dauer, Tonleiter-Schema Ganz-/Halbton), labeled_diagram (Instrumente, Klaviertastatur als
+    Rechtecke), timeline (Epochen), bar_chart (Dauerverhältnisse). Ein Notensystem-Visual fehlt noch.
+  kritiker: >
+    Prüfe musiktheoretische Korrektheit (deutsche Tonnamen: h statt b!, Vorzeichen, Intervallnamen).
+  kinderrechts_inspektor: >
+    Liedtexte nur gemeinfrei oder selbst verfasst; keine Songtexte aktueller Künstler. Musik mit
+    gewaltverherrlichenden oder diskriminierenden Texten nicht als Beispiel.
+  curriculum_agent: >
+    Erkenne, ob Notenlehre, Rhythmus, Harmonielehre oder Werkkenntnis geübt wird. Hör- und Musizieraufgaben kann Karo nicht abbilden; dafür kein Konzept anlegen (out_of_scope, wenn nur das vorkommt).
+difficulty_parameters:
+  notenwerte: vorkommende Notenwerte
+  taktarten: vorkommende Taktarten
+  vorzeichen: Anzahl Vorzeichen
+  fachbegriffe_neu: Anzahl neuer Begriffe
+answer_types: [choice, number, match, order, text]
+visual_types: [table, labeled_diagram, timeline, bar_chart]
+sensitive_topics:
+  - topic: Urheberrecht
+    rule: Keine geschützten Liedtexte oder Noten.
+not_in_app: Hören, Singen, Musizieren, Gehörbildung (bis Audio unterstützt wird).
+min_auto_checkable: 2
+example: |
+  Konzept MU.RHYTHMUS.NOTENWERTE „Notenwerte im 4/4-Takt“, Ziel Klasse 4.
+  {"prompt": "Wie viele Viertelschläge dauert eine halbe Note?", "solution": "2", "level": "target", "grade": 4,
+   "answer": {"type": "number", "value": 2},
+   "distractors": [{"answer": "0.5", "misconception": "F1", "feedback": "‚Halbe‘ heißt: die Hälfte einer ganzen Note (4 Schläge)."}]}

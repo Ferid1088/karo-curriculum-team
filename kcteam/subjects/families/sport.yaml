@@ -1,0 +1,50 @@
+id: sport
+label: Sport (Theorie)
+level_axis: grade
+overview: >
+  Karo kann Bewegung nicht ersetzen und prüft keine motorischen Leistungen. Abgedeckt wird Sporttheorie: Regeln,
+  Fair Play, Bewegungslehre, Gesundheit, Aufwärmen, Trainingslehre (Oberstufe), Erste Hilfe beim Sport.
+structure: >
+  Pädagogische Perspektiven (Leistung, Gesundheit, Kooperation, Wagnis, Gestaltung, Wahrnehmung). Theoriefelder:
+  Sportarten und Regeln, Bewegungsabläufe (Phasen), Aufwärmen und Dehnen, Gesundheit und Ernährung allgemein,
+  Trainingsprinzipien und motorische Grundeigenschaften (Ausdauer, Kraft, Schnelligkeit, Koordination,
+  Beweglichkeit), Sportbiologie, Sport und Gesellschaft (Oberstufe gA/eA).
+roles:
+  curriculum_analyst: >
+    Blöcke nach Theoriefeldern; Sportarten-Regeln nur für gängige Schulsportarten. Oberstufe: Trainingslehre,
+    Sportbiologie, Bewegungslehre, Sport und Gesellschaft.
+  fachdidaktiker: >
+    Wissen und Verstehen, keine Leistungsziele. Voraussetzungen z. B. Herz-Kreislauf-Grundlagen vor Ausdauertraining.
+  niveau_kalibrierer: >
+    Parameter: Fachbegriffe, Abstraktion (Regel | Prinzip | biologische Begründung), Textlänge.
+  diagnostiker: >
+    Typische Fehlvorstellungen: Dehnen vor dem Sport verhindert jede Verletzung, Muskelkater = Milchsäure,
+    mehr Training ist immer besser, Schwitzen = Fett verbrennen. choice, order (Bewegungsphasen), match (Regel–Sportart).
+  visual_didaktiker: >
+    flow_diagram (Bewegungsphasen, Aufwärmablauf), labeled_diagram (Spielfeld, Muskelgruppen schematisch),
+    coordinate_plane/bar_chart (Belastung und Erholung, Superkompensation), table (Trainingsplan-Schema).
+  kritiker: >
+    Prüfe Regelwissen auf Aktualität (im Zweifel allgemein formulieren) und sportbiologische Richtigkeit.
+  kinderrechts_inspektor: >
+    Keine Fragen nach Gewicht, Größe, BMI oder Leistungswerten des Kindes; keine Diät- oder Abnehmkontexte;
+    keine Körperideale oder Körpervergleiche; kein Leistungsdruck. Übungsvorschläge nur ungefährlich und mit
+    Sicherheitshinweis.
+  curriculum_agent: >
+    Nur Theorie (Regeln, Training, Gesundheit, Bewegungsbeschreibung) ist in der App möglich. Reine Praxis-Übungen sind out_of_scope; Körper- und Gewichtsthemen nie wertend benennen.
+difficulty_parameters:
+  fachbegriffe_neu: neue Fachbegriffe
+  abstraktion: regel | prinzip | biologische_begruendung
+answer_types: [choice, order, match, text, number]
+visual_types: [flow_diagram, labeled_diagram, coordinate_plane, bar_chart, table]
+sensitive_topics:
+  - topic: Körper und Gewicht
+    rule: Keine Körperdaten, keine Diäten, keine Bewertung von Körpern.
+not_in_app: Praktisches Sporttreiben und Leistungsmessung.
+min_auto_checkable: 2
+example: |
+  Konzept SP.AUFWAERMEN.ZWECK „Warum man sich aufwärmt“, Ziel Klasse 5.
+  {"prompt": "Warum wärmt man sich vor dem Sport auf?", "solution": "Muskeln werden besser durchblutet und warm, das Verletzungsrisiko sinkt.",
+   "level": "target", "grade": 5,
+   "answer": {"type": "choice", "options": [
+      {"text": "Damit Muskeln durchblutet und warm werden und man sich weniger leicht verletzt.", "correct": true},
+      {"text": "Damit man schon vor dem Spiel müde ist.", "misconception": "F1"}]}}

@@ -1,0 +1,66 @@
+id: mathematik
+label: Mathematik
+level_axis: grade
+overview: >
+  Stark hierarchisch aufgebautes Fach: fast jedes Konzept hat klare Voraussetzungen. Lücken aus früheren Klassen
+  sind die häufigste Ursache für Probleme – deshalb ist der Voraussetzungsgraph hier besonders wichtig.
+structure: >
+  Leitideen (KMK): Zahl und Operation · Größen und Messen · Raum und Form · Gleichungen und Funktionen (Muster,
+  Strukturen, funktionaler Zusammenhang) · Daten und Zufall. Prozessbezogene Kompetenzen: Argumentieren,
+  Problemlösen, Modellieren, Darstellungen verwenden, symbolisch/formal/technisch arbeiten, Kommunizieren.
+  Oberstufe: Analysis, Analytische Geometrie/Lineare Algebra, Stochastik – jeweils gA und eA.
+roles:
+  curriculum_analyst: >
+    Schneide Blöcke entlang der Leitideen und der typischen Lernreihenfolge (z. B. Zahlraum bis 20 → 100 → 1000 →
+    Million; Brüche → Dezimalzahlen → Prozent; Terme → Gleichungen → Funktionen). Oberstufe getrennt nach Analysis,
+    Geometrie/LA, Stochastik.
+  fachdidaktiker: >
+    Zerlege streng nach Verstehensstufen: enaktiv/ikonisch (mit Material/Bild) → symbolisch → automatisiert → angewandt
+    (Sachaufgabe). Grundvorstellungen als eigene Konzepte, wo sie tragen (z. B. „Bruch als Anteil“ vor „Bruch als
+    Operator“). Rechenverfahren nie ohne vorheriges Verständniskonzept.
+  niveau_kalibrierer: >
+    Parameter sind hier gut messbar: Zahlenraum, Stellenzahl, Nennergröße, Anzahl Rechenschritte, Zehnerübergang ja/nein,
+    Darstellungsform, Kontext (rein/einfache/komplexe Sachaufgabe), Einheiten. Grenzaufgaben so wählen, dass genau ein
+    Parameter die Grenze überschreitet.
+  diagnostiker: >
+    Nutze die gut belegten Fehlvorstellungen (z. B. Stellenwert: „305 = 3005“; Zehnerübergang; „Multiplizieren
+    vergrößert immer“; „0,25 > 0,3 weil 25 > 3“; Nenner addieren; Variable als Abkürzung eines Gegenstands;
+    Gleichheitszeichen als „Ergebnis kommt“). Jede typische falsche Zahl als distractor mit Fehlvorstellung.
+    Zahlantworten als number/fraction, nicht als text.
+  visual_didaktiker: >
+    Mathe ist das Fach, in dem Visuals fast immer essential sind, besonders bis Klasse 7: Zahlenstrahl, Stellenwerttafel,
+    Bruchstreifen/-kreise, Flächenmodell, Waage, Koordinatensystem, Geometrie. Schrittfolgen zeigen den
+    Denkweg (erst Bild, dann Symbol).
+  kritiker: >
+    Prüfe besonders: fehlende Grundvorstellungen vor Verfahren, Zehnerübergang als eigener Schritt, rechnerische
+    Richtigkeit jeder Lösung, ob Grenzaufgaben wirklich nur einen Parameter überschreiten.
+  kinderrechts_inspektor: >
+    Sachaufgaben-Kontexte: kein Glücksspiel/Wetten (auch keine Lotto-Wahrscheinlichkeiten in unteren Klassen; Stochastik
+    mit Würfeln/Münzen/Glücksrädern ist erlaubt), keine Schulden- oder Armutsszenarien, keine Diät-/Gewichtskontexte,
+    keine echten Marken und Preise von Markenprodukten.
+  curriculum_agent: >
+    Die Rechenaufgaben verraten Konzept und Niveau genau (Zahlraum, Nennerart, Anzahl der Schritte, Darstellung). Ein Blatt mit gemischten Aufgaben gehört meist zu mehreren vorhandenen Konzepten – dann existing mit allen IDs.
+difficulty_parameters:
+  zahlenraum: größte vorkommende Zahl (20, 100, 1000, 1 000 000, …)
+  stellen_nach_komma: Dezimalstellen
+  max_nenner: größter Nenner bei Brüchen
+  rechenschritte: Anzahl nötiger Rechenschritte
+  zehneruebergang: ja/nein
+  darstellung: bild | symbolisch | text | gemischt
+  kontext: rein | einfache_sachaufgabe | komplexe_sachaufgabe | modellierung
+  variablen: Anzahl Variablen / Art der Terme
+answer_types: [number, fraction, choice, mark, order, match, text, free_text]
+visual_types: [number_line, place_value_chart, fraction_bar, fraction_circle, area_model, balance_scale, coordinate_plane, geometry, bar_chart, table]
+sensitive_topics:
+  - topic: Geld in Sachaufgaben
+    rule: Taschengeld, Markt, Klassenkasse ja – Schulden, Armut, Kredite, Glücksspiel nein.
+not_in_app: Handelnder Umgang mit echtem Material (Karo ersetzt ihn durch Visuals und Interaktion).
+min_auto_checkable: 2
+example: |
+  Konzept MA.BRUECHE.ADD_UNGL „Ungleichnamige Brüche addieren“, Ziel Klasse 6.
+  Parameter: {"max_nenner": 12, "rechenschritte": 3, "kontext": ["rein", "einfache_sachaufgabe"]}
+  Diagnoseaufgabe (target):
+  {"prompt": "Berechne 1/2 + 1/3.", "solution": "3/6 + 2/6 = 5/6", "level": "target", "grade": 6,
+   "answer": {"type": "fraction", "value": "5/6", "accept_equivalent": true},
+   "distractors": [{"answer": "2/5", "misconception": "F1", "feedback": "Zähler und Nenner wurden einzeln addiert."},
+                   {"answer": "2/6", "misconception": "F2", "feedback": "Nur ein Bruch wurde erweitert."}]}

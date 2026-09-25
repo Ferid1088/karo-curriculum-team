@@ -1,0 +1,51 @@
+id: kunst
+label: Kunst
+level_axis: grade
+overview: >
+  Praxisfach: Das eigene Gestalten kann Karo nicht ersetzen. Karo deckt Wissen und Bildkompetenz ab: Farbenlehre,
+  Gestaltungsmittel, Bildanalyse, Kunstgeschichte, Architektur, Design, Medien – und kann Gestaltungsaufgaben planen helfen.
+structure: >
+  Produktion (Gestalten), Rezeption (Wahrnehmen, Beschreiben, Analysieren, Deuten), Reflexion. Themen:
+  Farbe (Farbkreis, Kontraste nach Itten, Farbwirkung), Form/Linie/Fläche, Raum (Überschneidung, Größe,
+  Perspektive, Fluchtpunkt), Komposition, Material und Technik, Epochen und Stile, Architektur, Design, Fotografie/Film.
+roles:
+  curriculum_analyst: >
+    Blöcke nach Gestaltungsmitteln (Farbe, Form, Raum, Komposition), nach Bildanalyse-Methodik und nach Epochen der
+    Kunstgeschichte (Oberstufe gA/eA). Praxisanteile als Wissen über Techniken formulieren.
+  fachdidaktiker: >
+    Begriffe vor Analyse vor Deutung (Farbkontraste kennen → im Bild erkennen → Wirkung deuten).
+  niveau_kalibrierer: >
+    Parameter: Anzahl Fachbegriffe, Komplexität des Bildbeispiels, Analyse-Ebene (beschreiben | analysieren | deuten),
+    Epochenwissen.
+  diagnostiker: >
+    Typische Fehlvorstellungen: Primärfarben im Malkasten = Lichtfarben, „schön = gut gemacht“, realistisch = besser,
+    Perspektive nur durch Größe. Werke nur beschreiben (Karo zeigt keine Fotos von Kunstwerken): gemeinfreie Werke
+    (Künstler seit über 70 Jahren tot) mit Titel/Jahr nennen. choice/match/order für Wissen, free_text für Beschreibung.
+  visual_didaktiker: >
+    Farbkreis und Kontraste als labeled_diagram (Kreise mit fill-Farben) oder table, Perspektive/Fluchtpunkt mit
+    geometry, Komposition (Goldener Schnitt, Bildachsen) mit geometry, Epochen mit timeline. freeform_svg nur für
+    einfache abstrakte Kompositionsbeispiele.
+  kritiker: >
+    Prüfe kunstgeschichtliche Fakten (Künstler, Jahr, Epoche) und korrekte Fachbegriffe.
+  kinderrechts_inspektor: >
+    Aktdarstellungen und gewalthaltige Werke nur ab Sekundarstufe, sachlich-kunsthistorisch eingeordnet. Keine
+    geschützten modernen Werke oder Figuren nachbilden.
+  curriculum_agent: >
+    Ordne nach Gestaltungsmittel oder Bildanalyse-Kompetenz zu. Abgebildete Kunstwerke nur als Beispiel für das Phänomen nennen, nicht als eigenes Konzept; praktisches Gestalten ist nicht in der App möglich.
+difficulty_parameters:
+  fachbegriffe_neu: Anzahl neuer Fachbegriffe
+  analyseebene: beschreiben | analysieren | deuten
+  epochenwissen: keines | grundlegend | vertieft
+answer_types: [choice, match, order, text, free_text]
+visual_types: [labeled_diagram, geometry, timeline, table, freeform_svg]
+sensitive_topics:
+  - topic: Urheberrecht
+    rule: Nur gemeinfreie Werke nennen; keine Nachbildung geschützter Werke oder Figuren.
+not_in_app: Eigenes Zeichnen, Malen, Bauen (nur Planung und Reflexion).
+min_auto_checkable: 2
+example: |
+  Konzept KU.FARBE.KOMPLEMENTAER „Komplementärfarben“, Ziel Klasse 5.
+  {"prompt": "Welche Farbe ist die Komplementärfarbe zu Rot?", "solution": "Grün (liegt im Farbkreis gegenüber)",
+   "level": "target", "grade": 5,
+   "answer": {"type": "choice", "options": [{"text": "Grün", "correct": true}, {"text": "Orange", "misconception": "F1"},
+                                            {"text": "Rosa", "misconception": "F2"}]}}

@@ -1,0 +1,70 @@
+id: gesellschaft
+label: Gesellschaftswissenschaften (Geschichte, Erdkunde, Politik, Wirtschaft, Pädagogik, Psychologie)
+level_axis: grade
+overview: >
+  Fächer mit viel Deutungs- und Urteilskompetenz. Neben Fachwissen stehen Methoden (Quellen, Karten, Statistiken)
+  und Urteilen. Voraussetzungen sind häufig Grundbegriffe und Methoden, weniger Rechenfertigkeiten.
+structure: >
+  Geschichte: historisches Denken (Sachkompetenz, Methodenkompetenz – Quelle vs. Darstellung, Orientierung in der
+  Zeit –, Urteilskompetenz, Perspektivität). Erdkunde (DGfG): Fachwissen, räumliche Orientierung, Erkenntnisgewinnung/
+  Methoden, Kommunikation, Beurteilung/Bewertung, Handlung. Politik/Wirtschaft: Analyse-, Urteils-, Handlungs-
+  und Methodenkompetenz; Beutelsbacher Konsens (Überwältigungsverbot, Kontroversitätsgebot, Schülerorientierung).
+roles:
+  curriculum_analyst: >
+    Geschichte chronologisch nach Epochen plus Methodenblöcke; Erdkunde nach Raum- und Themenfeldern plus
+    Orientierung/Kartenarbeit; Politik nach Lebenswelt → Gemeinde → Staat → Europa → Welt; Wirtschaft von Haushalt
+    über Markt zu Wirtschaftsordnung. Pädagogik/Psychologie nur Oberstufe.
+  fachdidaktiker: >
+    Grundbegriffe und Methoden als Voraussetzungen (Zeitrechnung vor Epochen, Quelle erkennen vor Quelle
+    auswerten, Maßstab vor Entfernungen berechnen, Gewaltenteilung vor Gesetzgebungsverfahren). Urteilskonzepte
+    (Sach- vs. Werturteil) eigens anlegen.
+  niveau_kalibrierer: >
+    Parameter: zeitliche/räumliche Distanz zur Lebenswelt, Anzahl Perspektiven, Quellentyp (Bild, Text, Statistik,
+    Karte), Textlänge, Fachbegriffe, Abstraktion (Beispiel → Struktur → Theorie), Urteilsniveau
+    (beschreiben – erklären – beurteilen – bewerten).
+  diagnostiker: >
+    Typische Fehlvorstellungen: Präsentismus („früher waren die Menschen dümmer“), Zeitraffer (Ritter und Dinosaurier
+    gleichzeitig), Quelle = Wahrheit, Norden = oben = bergauf, Wetter = Klima, Äquator ist heiß wegen Nähe zur Sonne,
+    Demokratie = nur Wählen, Staat = Regierung, Preis = Wert, Geld wird gedruckt, wie man es braucht.
+    Chronologie als order, Zuordnung als match, Wissen als choice, Urteile als free_text mit Raster
+    (These, Argumente beider Seiten, begründetes Urteil).
+  visual_didaktiker: >
+    timeline (Epochen, Ereignisse), flow_diagram (Ursache–Folge, Gesetzgebung, Wirtschaftskreislauf ohne Kreis →
+    sonst cycle), cycle (Wirtschaftskreislauf, Wasserkreislauf, Konjunktur), bar_chart/table (Statistiken,
+    Klimadaten), labeled_diagram (Vulkan, Schalenbau der Erde, Burg, Staatsorgane schematisch). Karten fehlen noch:
+    schematisch mit labeled_diagram oder als Tabelle arbeiten.
+  kritiker: >
+    Prüfe historische und geographische Fakten (Jahreszahlen, Orte, Zahlen), Aktualität politischer Fakten
+    (Institutionen, Zahlen – im Zweifel allgemein formulieren), Einhaltung des Kontroversitätsgebots.
+  kinderrechts_inspektor: >
+    Beutelsbacher Konsens: keine parteipolitische Wertung, keine Überwältigung, kontroverse Themen kontrovers
+    darstellen. Krieg, Diktatur, Verfolgung und Holocaust würdevoll, ohne Gewaltdetails, erst in passender
+    Klassenstufe. Keine Symbole verfassungswidriger Organisationen als Deko. Migration, Armut, Religion ohne
+    Stereotype. Keine Fragen nach Herkunft, Religion oder politischer Haltung des Kindes oder seiner Familie.
+  curriculum_agent: >
+    Unterscheide Sachwissen (Epoche, Institution, Raum) von Methoden (Quellenarbeit, Karten lesen, Diagramme). Politische Themen neutral benennen (Beutelsbacher Konsens); keine Parteien, keine aktuellen Personen als Konzepttitel.
+difficulty_parameters:
+  distanz: lebensweltnah | regional | national | global | historisch_fern
+  perspektiven: Anzahl der zu berücksichtigenden Perspektiven
+  quellentyp: bild | text | statistik | karte | diagramm
+  textlaenge_woerter: Länge von Quellen/Texten
+  urteilsniveau: beschreiben | erklären | beurteilen | bewerten
+answer_types: [choice, order, match, text, number, mark, free_text]
+visual_types: [timeline, flow_diagram, cycle, bar_chart, table, labeled_diagram]
+sensitive_topics:
+  - topic: Politische Neutralität
+    rule: Beutelsbacher Konsens; keine Parteinahme; aktuelle Konflikte sachlich und mehrperspektivisch.
+  - topic: NS-Zeit, Kriege, Genozide
+    rule: Altersgerecht, würdevoll, quellenkritisch, keine Propaganda-Reproduktion.
+  - topic: Psychische Gesundheit (Psychologie/Pädagogik)
+    rule: Wissenschaftlich-sachlich, keine Selbsttests oder Selbstdiagnosen.
+not_in_app: Exkursionen, Zeitzeugengespräche, echte Karten- und Atlasarbeit (bis ein Karten-Visual existiert).
+min_auto_checkable: 2
+example: |
+  Konzept GE.METHODEN.QUELLE_DARSTELLUNG „Quelle und Darstellung unterscheiden“, Ziel Klasse 6.
+  {"prompt": "Was ist eine historische Quelle?", "solution": "Ein Überrest oder Bericht aus der Zeit selbst, z. B. eine Urkunde von 1200.",
+   "level": "target", "grade": 6,
+   "answer": {"type": "choice", "options": [
+      {"text": "Ein Brief, den ein Mönch im Jahr 1200 geschrieben hat.", "correct": true},
+      {"text": "Ein Schulbuchtext von heute über das Mittelalter.", "misconception": "F1"},
+      {"text": "Ein Film über Ritter aus dem Jahr 2010.", "misconception": "F1"}]}}

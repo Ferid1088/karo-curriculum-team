@@ -1,0 +1,68 @@
+id: deutsch
+label: Deutsch
+level_axis: grade
+overview: >
+  Teils hierarchisch (Schriftspracherwerb, Rechtschreibung, Grammatik), teils kompetenzorientiert und spiralförmig
+  (Lesen, Schreiben, Sprechen). Für Karo: Grammatik und Rechtschreibung als klare Konzeptketten; Lesen und Schreiben
+  als Teilkompetenzen mit messbaren Textparametern.
+structure: >
+  Kompetenzbereiche (KMK): Sprechen und Zuhören · Schreiben · Lesen – mit Texten und Medien umgehen · Sprache und
+  Sprachgebrauch untersuchen (Grammatik, Rechtschreibung, Zeichensetzung). Grundschule: Schriftspracherwerb
+  (Laut-Buchstabe, Silbe, Anlaut), Rechtschreibstrategien (Mitsprechen, Nachdenken/Ableiten, Merken).
+  Oberstufe: Literatur (Epochen, Gattungen), Sachtexte, Sprache (Spracherwerb, Sprachwandel), Erörtern/Interpretieren; gA/eA.
+roles:
+  curriculum_analyst: >
+    Blöcke je Kompetenzbereich und Klassenstufe, z. B. „Lesen: Informationen entnehmen“, „Rechtschreibung:
+    Groß- und Kleinschreibung“, „Grammatik: Satzglieder“, „Schreiben: Erzählen“, „Literatur: Epochen der Aufklärung
+    bis Romantik“. Sprechen und Zuhören nur, soweit ohne Audio prüfbar (Gesprächsregeln, Argumente erkennen).
+  fachdidaktiker: >
+    Rechtschreibung nach Strategien und Phänomenen (Doppelkonsonant, ie, ß/ss, Dehnungs-h, das/dass, Groß-/
+    Kleinschreibung, Zeichensetzung). Grammatik von der Wortart über Satzglieder zur Satzreihe/Satzgefüge.
+    Lesen: Teilkompetenzen (Wort → Satz → Text, explizit → implizit, Information → Interpretation). Schreiben:
+    Planen – Formulieren – Überarbeiten, getrennt nach Textsorten.
+  niveau_kalibrierer: >
+    Messbare Parameter: Textlänge in Wörtern, durchschnittliche Satzlänge, Anteil unbekannter Wörter, Grundwortschatz
+    ja/nein, Textsorte, explizite vs. implizite Information, Anzahl Fachbegriffe. Klasse 1–2: sehr kurze Sätze,
+    lautgetreue Wörter.
+  diagnostiker: >
+    Typische Fehlvorstellungen: „ie immer bei langem i“, „groß schreibt man nur Dinge zum Anfassen“, „Komma dort,
+    wo man Luft holt“, das/dass-Verwechslung, Tempus-Mischung, Subjekt = erstes Wort. Leseaufgaben enthalten einen
+    SELBST VERFASSTEN oder gemeinfreien Kurztext im prompt. Schreiben: auch automatisch prüfbare Aufgaben bauen
+    (passende Einleitung wählen, Textbausteine ordnen, Fehler finden) und zusätzlich free_text mit Bewertungsraster.
+  visual_didaktiker: >
+    Satzglieder (sentence_parts), Wortbausteine/Ableitung (word_parts), Silbenbögen (syllables, Klasse 1–3),
+    Tabellen (Konjugation, Deklination, Tempus), Ablauf (flow_diagram für Textaufbau, Schreibprozess).
+    Lesen/Literatur brauchen selten Visuals (visual_need oft none oder helpful).
+  kritiker: >
+    Prüfe: Sind alle Lesetexte selbst verfasst oder gemeinfrei? Stimmt die Rechtschreibung aller Inhalte (amtliches
+    Regelwerk)? Passen Textlänge und Wortschatz zur Klasse? Sind Grammatikbegriffe einheitlich (Nomen vs. Substantiv
+    je nach Stufe erklärt)?
+  kinderrechts_inspektor: >
+    Schreibanlässe fragen nie nach privaten Erlebnissen, Familie, Ängsten oder Problemen („Schreibe über deinen
+    schlimmsten Tag“ → sperren; neutrale oder fiktive Anlässe verwenden). Literarische Texte mit schweren Themen
+    (Krieg, Tod, Gewalt) nur altersgerecht und eingeordnet.
+  curriculum_agent: >
+    Erkenne den Kompetenzbereich an den Aufgaben (Rechtschreibregel, Wortart, Satzglied, Textsorte, Lesestrategie). Lesetexte auf Arbeitsblättern sind fast immer geschützt: nur das Phänomen zuordnen, keine Textstellen übernehmen.
+difficulty_parameters:
+  textlaenge_woerter: Länge eines Lesetextes
+  satzlaenge_woerter: durchschnittliche Satzlänge
+  wortschatz: Grundwortschatz | Aufbauwortschatz | Fachwortschatz
+  textsorte: Erzählung | Sachtext | Gedicht | Brief | Dialog | diskontinuierlich
+  information: explizit | implizit | wertend
+  rechtschreibphaenomene: Liste der Phänomene, die vorkommen dürfen
+answer_types: [text, choice, order, match, mark, free_text]
+visual_types: [sentence_parts, word_parts, syllables, table, flow_diagram]
+sensitive_topics:
+  - topic: Urheberrecht bei Texten
+    rule: Nur selbst verfasste Texte oder gemeinfreie Werke (Autor seit mehr als 70 Jahren verstorben). Keine Auszüge aus Schulbüchern oder aktuellen Kinder- und Jugendbüchern.
+  - topic: Persönliche Schreibanlässe
+    rule: Keine Fragen nach Familie, Wohnort, Gefühlen oder Erlebnissen des Kindes.
+not_in_app: Mündliches Sprechen und Zuhören mit Audio (bis Audio unterstützt wird); Handschrift.
+min_auto_checkable: 2
+example: |
+  Konzept DE.RECHTSCHREIBUNG.DAS_DASS „das oder dass unterscheiden“, Ziel Klasse 5.
+  Parameter: {"satzlaenge_woerter": 12, "wortschatz": "Grundwortschatz"}
+  Diagnoseaufgabe:
+  {"prompt": "Setze ein: Ich hoffe, ___ du morgen kommst.", "solution": "dass (Konjunktion, leitet Nebensatz ein)",
+   "level": "target", "grade": 5,
+   "answer": {"type": "choice", "options": [{"text": "das", "misconception": "F1"}, {"text": "dass", "correct": true}]}}

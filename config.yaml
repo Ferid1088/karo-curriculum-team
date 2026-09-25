@@ -1,0 +1,85 @@
+# Karo Curriculum Team – Konfiguration
+# Werte in ${VAR} werden aus Umgebungsvariablen (.env) gelesen.
+
+# Welcher KI-Zugang benutzt wird. Beim interaktiven Start kann man ihn auch wählen.
+# Möglich: claude_token | anthropic_api | openrouter | openai | mock
+provider: ${KCTEAM_PROVIDER:-claude_token}
+
+providers:
+  # Claude-Abo-Token (claude setup-token -> CLAUDE_CODE_OAUTH_TOKEN), läuft über die claude CLI
+  claude_token:
+    default_model: sonnet
+    web_search: true
+    timeout_s: 600
+  # Claude API mit API-Key (ANTHROPIC_API_KEY)
+  anthropic_api:
+    default_model: claude-sonnet-4-5
+    web_search: true
+    max_tokens: 16000
+  # OpenRouter (OPENROUTER_API_KEY) – beliebige Modelle, Websuche über ":online"
+  openrouter:
+    default_model: anthropic/claude-sonnet-4.5
+    web_search: true
+    max_tokens: 16000
+  # OpenAI / GPT-Codex (OPENAI_API_KEY) über die Responses API
+  openai:
+    default_model: gpt-5-codex
+    web_search: true
+  # Offline-Testmodus ohne KI-Kosten
+  mock:
+    default_model: mock
+
+# Modell pro Rolle (optional). Leer = default_model des Providers.
+# Der Inspektor sollte das stärkste Modell bekommen.
+role_models:
+  claude_token:
+    kinderrechts_inspektor: opus
+    kritiker: opus
+    visual_didaktiker: opus
+  anthropic_api:
+    kinderrechts_inspektor: claude-opus-4-1
+  openrouter:
+    kinderrechts_inspektor: anthropic/claude-opus-4.1
+  openai: {}
+  mock: {}
+
+database:
+  # Arbeitsdatenbank des Teams (immer Postgres).
+  #   Stufe 1: lokaler Postgres-Container (docker compose)
+  #   Stufe 2: Supabase/Neon EU – dieselbe Datenbank, die Karo nutzt (siehe README „Datenbank für Karo“)
+  url: ${DATABASE_URL:-postgresql://karo:karo@localhost:5432/karo}
+
+# Stufe 1 (Karo-MVP mit SQLite): nach jedem Lauf / Auftrag alle freigegebenen Inhalte als SQLite-Datei
+# in Karos Volume schreiben. Karo liest sie mit: ATTACH DATABASE '/data/curriculum.db' AS cur;
+sqlite_export:
+  enabled: ${KARO_SQLITE_EXPORT:-false}
+  path: ${KARO_SQLITE_PATH:-/karo-export/curriculum.db}
+
+# Karo-Spezifikation vom gemeinsamen Volume (wird beim Lauf gelesen, falls vorhanden).
+# Datei oder Ordner; bei einem Ordner werden alle .md-Dateien gelesen.
+karo_spec_path: ${KARO_SPEC_PATH:-/karo}
+karo_spec_max_chars: 12000
+
+pipeline:
+  default_grades: [1, 13]      # nur Rückfall; normalerweise gilt der Klassenbereich aus dem Fachprofil
+  max_inspector_rounds: 3     # danach: gesperrt -> Mensch
+  max_critic_rounds: 1        # Überarbeitungsrunden nach Kritiker
+  max_json_retries: 2         # erneuter Versuch bei ungültigem JSON
+  parallel_concepts: 4        # Konzepte, die gleichzeitig bearbeitet werden
+  include_prerequisites: true # bei Klassenauswahl auch nötige Voraussetzungen aus tieferen Klassen bearbeiten
+  visuals: true               # Visual-Didaktiker einsetzen
+  max_agent_calls: 3000       # Budget-Obergrenze pro Lauf
+  provider_retries: 5         # Wiederholungen bei vorübergehenden Anbieterfehlern
+  max_retry_wait: 300         # längste Wartezeit (Sekunden) zwischen zwei Versuchen
+  critic_chunk: 8             # Konzepte pro Kritiker-Aufruf
+
+# Curriculum-Agent (kcteam serve): Aufträge von Karo, wenn zu einem Arbeitsblatt nichts passt.
+# Such-Schwellen, Tageslimit usw. stehen in der Datenbank: curriculum.request_policy
+ondemand:
+  poll_seconds: 30            # Rückfall-Abfrage, falls eine NOTIFY-Nachricht verloren geht
+  fast_lane: true             # erst ohne Visuals freigeben (schneller für das wartende Kind), Visuals danach
+  prefetch_next: 1            # wahrscheinlich nächstes Thema vorab beauftragen (0 = aus)
+  max_attempts: 3             # Fehlversuche pro Auftrag, danach 'failed'
+  allow_unknown_subjects: false
+
+export_dir: ${KCTEAM_EXPORT_DIR:-/data/export}

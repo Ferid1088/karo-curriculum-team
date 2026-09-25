@@ -1,0 +1,60 @@
+id: sachunterricht
+label: Sachunterricht (Grundschule)
+level_axis: grade
+overview: >
+  Vielperspektivisches Fach der Klassen 1–4. Kinder sind 6–10 Jahre alt und lesen teils noch wenig:
+  sehr kurze, vorlesbare Aufgaben, viel Anschauung, erfahrungsnahe Kontexte.
+structure: >
+  Perspektiven (GDSU-Perspektivrahmen): sozialwissenschaftlich (Zusammenleben, Regeln, Kinderrechte),
+  naturwissenschaftlich (Pflanzen, Tiere, Körper, Wasser, Luft, Wetter, Magnetismus), geographisch (Orientierung,
+  Schulweg, Heimatraum, Karten lesen), historisch (früher – heute, Zeit, Familiengeschichte allgemein),
+  technisch (Werkzeuge, Brücken, Fahrrad). Perspektivenvernetzend: Nachhaltigkeit, Gesundheit, Medien, Mobilität.
+roles:
+  curriculum_analyst: >
+    Blöcke nach Perspektiven und Themen, typische Einordnung Klasse 1/2 vs. 3/4. Vorwissen für spätere Fachfächer
+    (Biologie, Physik, Erdkunde, Geschichte) mitdenken.
+  fachdidaktiker: >
+    Von der eigenen Erfahrung zum Begriff: Beobachten → Beschreiben → Ordnen → einfache Erklärung. Wenige, sehr
+    konkrete Konzepte. Voraussetzungen meist Begriffe (z. B. „Wetterelemente kennen“ vor „Wetter messen“).
+  niveau_kalibrierer: >
+    Parameter: Satzlänge (Kl. 1–2 ≤ 8 Wörter), Anzahl Fachbegriffe (Kl. 1–2 höchstens 1–2 neue), konkret vs. abstrakt,
+    Anteil Bild vs. Text. Aufgaben müssen vorgelesen verständlich sein.
+  diagnostiker: >
+    Typische Kindervorstellungen: Pflanzen „essen“ Erde; Wolken sind Rauch/Watte; Sonne dreht sich um die Erde;
+    früher war alles schwarz-weiß; Magnete ziehen alle Metalle an. Vor allem choice (mit kurzen Optionen), order,
+    match und mark auf Abbildungen; kaum Schreibaufgaben.
+  visual_didaktiker: >
+    Fast immer essential: labeled_diagram (Pflanze, Körperteile, Fahrrad, Zahn), cycle (Jahreszeiten,
+    Wasserkreislauf, Lebenszyklus Frosch/Schmetterling), timeline (früher – heute), flow_diagram, bar_chart
+    (Wetterbeobachtung), table. Große, einfache Formen, wenige Beschriftungen.
+  kritiker: >
+    Prüfe: kindgerechte Sprache, keine Überforderung durch Fachbegriffe, fachliche Richtigkeit trotz Vereinfachung
+    (Vereinfachen ja, Falsches nein).
+  kinderrechts_inspektor: >
+    Besonders streng, da jüngste Kinder. Keine Annahmen über Familienform („Mama und Papa“ → „deine Familie“ /
+    fiktive Familien in Vielfalt), keine Fragen nach der eigenen Familie, Wohnung, Religion oder Gesundheit.
+    Körper: korrekte Bezeichnungen, Prävention („Mein Körper gehört mir“) nur behutsam, niemals sexualisiert.
+    Gefahren (Verkehr, Feuer) ohne Angst zu machen.
+  curriculum_agent: >
+    Ordne nach Perspektive (naturwissenschaftlich, technisch, sozial, räumlich, historisch) und Klasse 1–4 zu. Themen mit Bezug zum Körper oder zur Familie besonders behutsam benennen.
+difficulty_parameters:
+  satzlaenge_woerter: Satzlänge
+  fachbegriffe_neu: neue Fachbegriffe
+  abstraktion: konkret | beobachtbar | erklärend
+  bildanteil: hoch | mittel | gering
+answer_types: [choice, order, match, mark, text]
+visual_types: [labeled_diagram, cycle, timeline, flow_diagram, bar_chart, table]
+sensitive_topics:
+  - topic: Familie und Herkunft
+    rule: Vielfalt zeigen, nichts voraussetzen, nichts abfragen.
+  - topic: Körper und Prävention
+    rule: Sachlich, schützend, altersgerecht; keine sexuellen Inhalte.
+not_in_app: Eigenes Beobachten und Experimentieren draußen (Karo kann dazu anregen, mit Hinweis auf Begleitung durch Erwachsene).
+min_auto_checkable: 2
+example: |
+  Konzept SU.PFLANZEN.WACHSTUM „Was Pflanzen zum Wachsen brauchen“, Ziel Klasse 2.
+  {"prompt": "Was braucht eine Pflanze zum Wachsen? Wähle alles Richtige.", "solution": "Wasser, Licht, Luft (und Erde als Halt/Nährstoffe)",
+   "level": "target", "grade": 2,
+   "answer": {"type": "choice", "multiple": true, "options": [
+      {"text": "Wasser", "correct": true}, {"text": "Licht", "correct": true}, {"text": "Luft", "correct": true},
+      {"text": "Dunkelheit", "misconception": "F1"}]}}

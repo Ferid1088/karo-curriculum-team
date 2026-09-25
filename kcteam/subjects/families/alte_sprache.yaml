@@ -1,0 +1,55 @@
+id: alte_sprache
+label: Alte Sprachen (Latein, Altgriechisch)
+level_axis: learning_year
+overview: >
+  Reflexionssprachen: Ziel ist das Verstehen und Übersetzen von Texten, nicht das Sprechen. Stark hierarchisch in
+  Formenlehre und Syntax. Niveau nach Lernjahr; target_grade = Startklasse + Lernjahr − 1; learning_year immer angeben.
+structure: >
+  Sprachkompetenz (Wortschatz, Formenlehre, Syntax), Textkompetenz (Erschließen, Übersetzen, Interpretieren),
+  Kulturkompetenz (Antike Lebenswelt, Mythologie, Geschichte, Rezeption). Lehrbuchphase (ca. 3–4 Lernjahre),
+  danach Lektürephase mit Originaltexten (Caesar, Nepos, Ovid, Cicero, Seneca, Vergil; Griechisch: Homer, Platon …).
+roles:
+  curriculum_analyst: >
+    Blöcke: Formenlehre (Deklinationen, Konjugationen, Tempora, Modi), Syntax (Kasusfunktionen, AcI, Partizipien,
+    Ablativus absolutus, Gerundium/Gerundivum, Konjunktivsätze), Wortschatz nach Sachfeldern, Texterschließung,
+    Antike Kultur. Lektürephase nach Autoren/Gattungen.
+  fachdidaktiker: >
+    Formen vor Funktion vor Übersetzung. Jede Konstruktion als eigenes Konzept mit Voraussetzungen (Partizip →
+    Participium coniunctum → Ablativus absolutus). Kulturkonzepte ohne sprachliche Voraussetzungen erlaubt.
+  niveau_kalibrierer: >
+    Parameter: Lernjahr, bekannte Formen, bekannte Konstruktionen, Satzlänge, Anzahl Nebensätze, Wortschatz
+    (Lernvokabular bis Lektion …), adaptierter vs. Originaltext.
+  diagnostiker: >
+    Typische Fehler: Wortstellung wie im Deutschen übersetzen, Endungen verwechseln (-a immer Femininum/Nominativ),
+    Kasusfunktion nicht erkennen, Tempus-Verwechslung, ähnliche Vokabeln (liber/liberi). Formbestimmung als choice
+    oder text; Übersetzung kurzer Sätze als text mit mehreren akzeptierten Varianten, längere als free_text mit Raster
+    (Kasus richtig, Tempus richtig, Satzbau richtig, sinnvolles Deutsch).
+  visual_didaktiker: >
+    Deklinations- und Konjugationstabellen (table), Satzbau/Satzglieder (sentence_parts), Wortbildung (word_parts),
+    Zeitstrahl römische Geschichte (timeline), labeled_diagram (römisches Haus, Forum).
+  kritiker: >
+    Prüfe jede lateinische/griechische Form auf Korrektheit, Quantitäten nur wo relevant, akzeptierte
+    Übersetzungsvarianten vollständig.
+  kinderrechts_inspektor: >
+    Antike Texte enthalten Gewalt, Sklaverei und sexualisierte Mythen: altersgerecht auswählen, Sklaverei und
+    Gewalt kritisch einordnen, keine verharmlosende Darstellung; Ovid-Stellen mit sexueller Gewalt nicht in Sek I.
+  curriculum_agent: >
+    Arbeitsblätter zeigen meist Formen (Deklination, Konjugation), Satzbau oder Übersetzungsstellen. Ordne nach Grammatikphänomen und Lernjahr zu, nicht nach dem Autor des Textes. Originaltexte sind gemeinfrei, Schulbuch-Übersetzungen nicht – nichts übernehmen.
+difficulty_parameters:
+  lernjahr: 1–8
+  formen: bekannte Formen
+  konstruktionen: bekannte Satzkonstruktionen
+  satzlaenge_woerter: Satzlänge
+  textart: Lehrbuchtext (selbst verfasst) | adaptierter Originaltext | Originaltext
+answer_types: [text, choice, match, order, free_text]
+visual_types: [table, sentence_parts, word_parts, timeline, labeled_diagram]
+sensitive_topics:
+  - topic: Sklaverei und Gewalt in antiken Texten
+    rule: Immer einordnen; keine romantisierende oder verharmlosende Darstellung.
+not_in_app: Vortrag/Rezitation.
+min_auto_checkable: 2
+example: |
+  Konzept LA.KASUS.ABLATIV_INSTRUMENTALIS „Ablativ des Mittels“, learning_year 2 (Start Kl. 6 → Kl. 7).
+  {"prompt": "Übersetze: Marcus gladio pugnat.", "solution": "Marcus kämpft mit dem Schwert.", "level": "target", "grade": 7,
+   "answer": {"type": "text", "accepted": ["Marcus kämpft mit dem Schwert", "Marcus kämpft mit einem Schwert", "Markus kämpft mit dem Schwert"]},
+   "distractors": [{"answer": "Marcus kämpft das Schwert", "misconception": "F1", "feedback": "Ablativ hier: womit?"}]}

@@ -1,0 +1,60 @@
+id: religion_ethik
+label: Religion, Ethik, Philosophie
+level_axis: grade
+overview: >
+  Religionsunterricht ist in Deutschland konfessionell gebunden (Art. 7 Abs. 3 GG): Inhalte aus der Perspektive der
+  jeweiligen Konfession/Religion, aber informierend und nicht vereinnahmend. Ethik/Werte und Normen/Praktische
+  Philosophie ist bekenntnisfrei. Viel Deuten, Argumentieren und Urteilen – Diagnostik prüft vor allem Wissen,
+  Begriffe und Argumentationsfähigkeit.
+structure: >
+  Religion: Wahrnehmen und Darstellen, Deuten, Urteilen, Dialog, Gestalten; Themen: Gott/Transzendenz, Mensch,
+  Heilige Schriften, Feste und Rituale, Personen (Propheten, Jesus, Heilige), Kirche/Gemeinde/Gemeinschaft,
+  Weltreligionen, Ethik. Ethik/Philosophie: Fragen nach dem guten Leben, Gerechtigkeit, Freiheit, Verantwortung,
+  Wahrheit, Natur/Technik, Religionen und Weltanschauungen; Oberstufe: Erkenntnistheorie, Anthropologie, Ethik, Staatsphilosophie.
+roles:
+  curriculum_analyst: >
+    Blöcke nach den Themenbereichen des Fachs; bei Religion die Perspektive der Konfession im Titel nicht nötig, in der
+    Beschreibung aber klar. Weltreligionen-Blöcke interreligiös und respektvoll. Philosophie ab Klasse 10.
+  fachdidaktiker: >
+    Wissenskonzepte (Feste, Begriffe, Erzählungen, Positionen) als Grundlage für Deutungs- und Urteilskonzepte.
+    Argumentationskonzepte (These, Begründung, Einwand) als eigene, fachübergreifende Voraussetzungen.
+  niveau_kalibrierer: >
+    Parameter: Abstraktion (Erzählung → Begriff → Theorie), Anzahl Perspektiven, Textlänge, Fachbegriffe,
+    Urteilsniveau. Grundschule: Geschichten und Bilder, keine abstrakten Begriffe.
+  diagnostiker: >
+    Typische Fehlvorstellungen: Verwechslung von Festen und ihrer Bedeutung, Ethik = bloße Meinung, „alles ist
+    relativ“, Gleichsetzung von Religion und Kultur, Missverständnis wörtlich/symbolisch bei Erzählungen.
+    Wissensfragen als choice/match/order, Positionen zuordnen als match, eigene Urteile nur als free_text mit Raster –
+    und niemals fragen, was das Kind selbst glaubt.
+  visual_didaktiker: >
+    timeline (Kirchenjahr, Religionsgeschichte, Philosophiegeschichte), cycle (Jahreskreis der Feste), table
+    (Vergleich der Religionen), flow_diagram (Argumentationsaufbau), labeled_diagram (Kirche/Moschee/Synagoge
+    schematisch). Keine Darstellungen, die religiöse Gefühle verletzen können (z. B. keine Bilder des Propheten Mohammed).
+  kritiker: >
+    Prüfe: theologisch/philosophisch korrekt aus der Perspektive des Fachs, respektvoll gegenüber anderen
+    Religionen, keine Vermischung von Glaubensaussagen und Tatsachenbehauptungen ohne Kennzeichnung.
+  kinderrechts_inspektor: >
+    Religiöse und weltanschauliche Neutralität gegenüber anderen Bekenntnissen, keine Abwertung, keine
+    Missionierung. Keine Abfrage von Religionszugehörigkeit oder Glauben des Kindes (Art. 9 DSGVO – besondere
+    Kategorie). Tod, Leid, Schuld behutsam und altersgerecht.
+  curriculum_agent: >
+    Bekenntnisfrei und respektvoll benennen; bei Religion die Konfession des Fachs beachten. Persönliche Glaubensfragen an das Kind sind kein Konzept.
+difficulty_parameters:
+  abstraktion: erzählung | begriff | theorie
+  perspektiven: Anzahl der Perspektiven
+  textlaenge_woerter: Länge von Texten
+  urteilsniveau: wiedergeben | deuten | beurteilen
+answer_types: [choice, match, order, text, free_text]
+visual_types: [timeline, cycle, table, flow_diagram, labeled_diagram]
+sensitive_topics:
+  - topic: Glaube des Kindes
+    rule: Nie abfragen; Aufgaben fragen nach Wissen und Positionen, nicht nach persönlichem Bekenntnis.
+  - topic: Bildliche Darstellungen
+    rule: Religiöse Bilderverbote respektieren (keine Mohammed-Darstellungen); Symbole korrekt und respektvoll.
+not_in_app: Gottesdienst, Gebet, persönliche Glaubenspraxis.
+min_auto_checkable: 2
+example: |
+  Konzept RE.KIRCHENJAHR.FESTE „Hauptfeste des Kirchenjahres“, Ziel Klasse 3.
+  {"prompt": "Ordne die Feste in der Reihenfolge des Kirchenjahres (Beginn: Advent).", "solution": "Advent – Weihnachten – Ostern – Pfingsten",
+   "level": "target", "grade": 3,
+   "answer": {"type": "order", "items": ["Advent", "Weihnachten", "Ostern", "Pfingsten"]}}

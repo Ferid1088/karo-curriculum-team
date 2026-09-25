@@ -1,0 +1,55 @@
+id: informatik
+label: Informatik
+level_axis: grade
+overview: >
+  Junges Fach mit klarer Begriffs- und Konzepthierarchie (Daten → Algorithmen → Programme → Systeme). Viele Aufgaben
+  sind gut automatisch prüfbar (Ausgaben vorhersagen, Schritte ordnen, Binärzahlen).
+structure: >
+  Inhaltsbereiche (GI-Bildungsstandards): Information und Daten · Algorithmen · Sprachen und Automaten ·
+  Informatiksysteme · Informatik, Mensch und Gesellschaft. Prozessbereiche: Modellieren und Implementieren,
+  Begründen und Bewerten, Strukturieren und Vernetzen, Kommunizieren und Kooperieren, Darstellen und Interpretieren.
+roles:
+  curriculum_analyst: >
+    Blöcke: Daten und Codierung (Binärsystem, Bilder, Text), Algorithmen (Sequenz, Verzweigung, Schleife,
+    Variablen), Programmieren (blockbasiert → textbasiert), Datenbanken, Netze und Internet, Datenschutz und
+    Datensicherheit, Automaten und Sprachen (Oberstufe), KI-Grundlagen, Informatik und Gesellschaft.
+  fachdidaktiker: >
+    Von der Alltagsbeschreibung (Handlungsanweisung) über Pseudocode zum Programm. Kontrollstrukturen einzeln
+    und nacheinander, Variablen vor Schleifen mit Zählern. Programmiersprache neutral halten (Pseudocode oder
+    Python-nah), blockbasiert in Klasse 5–6.
+  niveau_kalibrierer: >
+    Parameter: Anzahl Kontrollstrukturen, Verschachtelungstiefe, Anzahl Variablen, Codezeilen, Datenmenge,
+    Abstraktion (konkret | Pseudocode | Code).
+  diagnostiker: >
+    Typische Fehlvorstellungen: „Computer denkt/versteht“, Variable enthält mehrere Werte gleichzeitig, = als
+    mathematische Gleichheit statt Zuweisung, Schleife läuft einmal zu viel/wenig (off-by-one), Internet = WWW,
+    gelöschte Daten sind weg. Ausgabe vorhersagen als text/number, Schritte ordnen als order, Code-Auswahl als choice.
+  visual_didaktiker: >
+    flow_diagram (Programmablauf, Algorithmus), table (Wertetabellen/Trace, Datenbanktabellen, Binärtabellen),
+    labeled_diagram (Rechneraufbau, Netzwerk), place_value_chart (Binär-Stellenwerte mit Spalten 8 4 2 1).
+  kritiker: >
+    Prüfe jede Programmausgabe durch gedankliches Ausführen, Einrückungen/Syntax im Pseudocode einheitlich.
+  kinderrechts_inspektor: >
+    Keine Anleitungen zum Hacken, Umgehen von Sicherungen oder Jugendschutzfiltern; keine echten Passwörter,
+    Namen oder Accounts in Beispielen; Cybermobbing und Datenschutz sachlich und schützend.
+  curriculum_agent: >
+    Erkenne, ob es um Konzepte (Algorithmen, Daten, Codierung) oder um eine konkrete Programmiersprache/App geht. Konzepte werden werkzeugneutral benannt; Markennamen von Apps oder Plattformen nicht in Titel übernehmen.
+difficulty_parameters:
+  kontrollstrukturen: Anzahl/Art (Sequenz, Verzweigung, Schleife)
+  verschachtelung: Tiefe
+  variablen: Anzahl
+  codezeilen: Länge
+  abstraktion: alltag | pseudocode | code
+answer_types: [text, number, order, choice, match, free_text]
+visual_types: [flow_diagram, table, labeled_diagram, place_value_chart]
+sensitive_topics:
+  - topic: Sicherheit
+    rule: Nur schützendes Wissen, keine Angriffstechniken.
+not_in_app: Freies Programmieren in einer echten Entwicklungsumgebung.
+min_auto_checkable: 2
+example: |
+  Konzept IF.DATEN.BINAER_UMRECHNEN „Binärzahlen in Dezimalzahlen umrechnen“, Ziel Klasse 7.
+  {"prompt": "Welche Dezimalzahl ist 1011₂?", "solution": "8 + 0 + 2 + 1 = 11", "level": "target", "grade": 7,
+   "answer": {"type": "number", "value": 11},
+   "distractors": [{"answer": "1011", "misconception": "F1", "feedback": "Die Ziffern haben die Stellenwerte 8, 4, 2, 1."},
+                   {"answer": "3", "misconception": "F2", "feedback": "Nicht die Einsen zählen – ihre Stellenwerte addieren."}]}

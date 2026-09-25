@@ -1,0 +1,28 @@
+id: allgemein
+label: Allgemeines Fachprofil
+level_axis: grade
+overview: >
+  Für Fächer ohne eigenes Profil. Das Team orientiert sich an den Lehrplänen des Fachs und an den allgemeinen
+  Grundsätzen. Ergebnisse vor der Freigabe besonders gründlich von einer Fachlehrkraft prüfen lassen.
+structure: >
+  Fachwissen, Methoden, Kommunikation, Urteilen – angepasst an das Fach.
+roles:
+  curriculum_analyst: Recherchiere die Lehrpläne des Fachs gründlich und nenne Quellen.
+  fachdidaktiker: Zerlege in prüfbare Konzepte mit klaren Voraussetzungen innerhalb des Fachs.
+  niveau_kalibrierer: Wähle fachpassende, messbare Parameter und begründe sie in levels.
+  diagnostiker: Nutze bekannte Fehlvorstellungen des Fachs; auswertbare Antworten mit distractors.
+  visual_didaktiker: Wähle Darstellungen aus dem Katalog nur, wo sie das Verstehen wirklich verbessern.
+  kritiker: Prüfe besonders streng auf fachliche Richtigkeit.
+  kinderrechts_inspektor: Allgemeine Regeln streng anwenden.
+  curriculum_agent: >
+    Ordne über die Aufgaben zu, nicht über die Überschrift. Im Zweifel ein vorhandenes, etwas größeres Konzept wählen statt ein fast gleiches neues anzulegen.
+difficulty_parameters:
+  fachbegriffe_neu: neue Fachbegriffe
+  abstraktion: konkret | begrifflich | theoretisch
+  textlaenge_woerter: Textlänge
+answer_types: [choice, text, number, order, match, free_text]
+visual_types: [table, flow_diagram, timeline, labeled_diagram, bar_chart]
+sensitive_topics: []
+not_in_app: null
+min_auto_checkable: 2
+example: ""

@@ -1,0 +1,63 @@
+# Start:  docker compose run --rm kcteam            (fragt nach dem Fach)
+#         docker compose run --rm kcteam status
+#         docker compose run --rm kcteam review list
+#
+# Nutzt Karo schon Supabase/Postgres? Dann DATABASE_URL in .env darauf zeigen lassen
+# und den Dienst "postgres" weglassen:  docker compose run --rm --no-deps kcteam
+#
+# Curriculum-Agent als Dienst für Karo (läuft dauerhaft, startet nach Neustart wieder):
+#         docker compose up -d curriculum-agent
+
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: karo
+      POSTGRES_PASSWORD: karo
+      POSTGRES_DB: karo
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      # nur auf deinem Rechner erreichbar; anderer Port, falls 5432 schon belegt ist (POSTGRES_HOST_PORT in .env)
+      - "127.0.0.1:${POSTGRES_HOST_PORT:-5432}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U karo"]
+      interval: 3s
+      retries: 20
+
+  kcteam:
+    build: .
+    env_file: .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+    stdin_open: true
+    tty: true
+    volumes:
+      - karo_data:/karo:ro        # Karo-Spec / Dokumente (nur lesen)
+      - karo_export:/karo-export  # Stufe 1: curriculum.db für das Karo-MVP (sonst ungenutzt)
+      - ./data:/data              # Exporte und Logs
+
+  curriculum-agent:
+    build: .
+    command: ["serve"]
+    env_file: .env
+    restart: unless-stopped
+    stop_grace_period: 60s        # laufende KI-Aufrufe sauber beenden
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - karo_data:/karo:ro
+      - karo_export:/karo-export
+      - ./data:/data
+    profiles: ["agent"]
+
+volumes:
+  pgdata:
+  # Karos Volume (Spec lesen). Gibt es das Volume schon (Karo läuft), wird es mitbenutzt, sonst neu angelegt.
+  karo_data:
+    name: ${KARO_VOLUME:-karo_data}
+  # Stufe 1: das Volume, das Karo unter /data einbindet (dort landet curriculum.db). Standard: wie KARO_VOLUME.
+  karo_export:
+    name: ${KARO_EXPORT_VOLUME:-${KARO_VOLUME:-karo_data}}

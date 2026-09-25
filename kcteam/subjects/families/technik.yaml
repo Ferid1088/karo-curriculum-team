@@ -1,0 +1,46 @@
+id: technik
+label: Technik / Werken
+level_axis: grade
+overview: >
+  Handlungsorientiertes Fach. Karo deckt Wissen ab: Werkstoffe, Werkzeuge und Sicherheit, technisches Zeichnen,
+  Konstruktion, einfache Elektrotechnik, Energie, Technik und Gesellschaft, Berufsorientierung.
+structure: >
+  Technik verstehen, konstruieren/herstellen, nutzen, bewerten, kommunizieren (technisches Zeichnen). Themen:
+  Werkstoffe (Holz, Metall, Kunststoff), Werkzeuge und Maschinen, Arbeitssicherheit, Konstruktion und Stabilität,
+  Mechanik (Hebel, Getriebe), Elektrotechnik, Energieversorgung, Steuern und Regeln, Technikfolgen.
+roles:
+  curriculum_analyst: >
+    Blöcke nach Themenfeldern; Arbeitssicherheit als frühe Voraussetzung für alle Werkzeug-Themen.
+  fachdidaktiker: >
+    Funktion vor Konstruktion vor Bewertung. Werkzeugwissen immer mit Sicherheitskonzept verknüpfen.
+  niveau_kalibrierer: >
+    Parameter: Fachbegriffe, Anzahl Bauteile, Abstraktion (Gegenstand | Zeichnung | Schaltplan), Rechenanteil.
+  diagnostiker: >
+    Typische Fehlvorstellungen: dickeres Material ist immer stabiler, Dreieck vs. Viereck bei Stabilität, Strom fließt
+    nur bis zur Lampe, Hebel „macht Kraft“. choice, order (Arbeitsschritte), match (Werkzeug–Verwendung), mark.
+  visual_didaktiker: >
+    labeled_diagram (Werkzeuge, Bauteile, Stromkreis, Hebel), geometry (Ansichten, Maße, Stabilität von
+    Dreiecken), flow_diagram (Arbeitsablauf), table (Werkstoffeigenschaften).
+  kritiker: >
+    Prüfe technische Richtigkeit und dass jeder Arbeitsablauf die nötigen Sicherheitsschritte enthält.
+  kinderrechts_inspektor: >
+    Keine Anleitungen, die ohne Aufsicht gefährlich sind (Maschinen, Netzstrom, Löten ohne Hinweis); immer Hinweis auf
+    Aufsicht durch Erwachsene und Schutzausrüstung.
+  curriculum_agent: >
+    Ordne nach Themenfeld (Konstruktion, Energie, Informationstechnik, Arbeitssicherheit) zu. Werkstücke und Maschinen nur als Beispiel für das Konzept; Arbeitssicherheit ist immer Voraussetzung für handwerkliche Themen.
+difficulty_parameters:
+  fachbegriffe_neu: neue Fachbegriffe
+  bauteile: Anzahl Bauteile
+  abstraktion: gegenstand | zeichnung | schaltplan
+answer_types: [choice, order, match, mark, number, text]
+visual_types: [labeled_diagram, geometry, flow_diagram, table]
+sensitive_topics:
+  - topic: Arbeitssicherheit
+    rule: Jede Werkzeug- oder Elektroaufgabe mit Sicherheitshinweis.
+not_in_app: Praktisches Arbeiten in der Werkstatt.
+min_auto_checkable: 2
+example: |
+  Konzept TC.KONSTRUKTION.DREIECK_STABIL „Dreiecke machen Konstruktionen stabil“, Ziel Klasse 6.
+  {"prompt": "Welche Form verformt sich unter Druck NICHT, wenn die Ecken beweglich verbunden sind?", "solution": "Dreieck",
+   "level": "target", "grade": 6,
+   "answer": {"type": "choice", "options": [{"text": "Dreieck", "correct": true}, {"text": "Quadrat", "misconception": "F1"}]}}
