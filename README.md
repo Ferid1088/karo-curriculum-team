@@ -365,6 +365,20 @@ In Karo: `KARO_CURRICULUM_KEY=kc_…` in `.env`, dann mit `docker-compose.curric
 
 Doku zum Ausprobieren: `http://127.0.0.1:8088/docs`. Anmeldung mit `Authorization: Bearer kc_…`; der Schlüssel bestimmt die Einrichtung (Tageslimit, Nachfrage). POST-Aufrufe dürfen `Idempotency-Key` mitschicken.
 
+**Aktuelle Karo-Anbindung:** Die App kann URL und Schlüssel auch lokal in ihrer
+geschützten Konfiguration als `curriculum_url` und `curriculum_key` speichern.
+Sie fragt fehlende Lernreihen über diese API an, parkt `pending`-Aufträge
+dauerhaft und prüft fertige Inhalte vor dem Import nochmals. Importierte
+Fassungen sind versionierte lokale Kopien; persönliche Themen und Prüfungen
+behalten getrennte Sitzungen und Fortschritte. Bei einem Dienstausfall startet
+die App keine zusätzliche lokale KI-Erzeugung. Vorhandene lokale Inhalte
+bleiben nutzbar. Details stehen in Karos `docs/curriculum-anbindung.md`.
+
+Ein optionaler projektübergreifender Vertragstest verwendet das tatsächliche
+App-Format statt einer kopierten Vorlage:
+`KARO_APP_PATH=/pfad/zu/karo TEST_DATABASE_URL=<wegwerfbare-testdatenbank> uv run pytest tests/test_karo_bridge_contract.py`.
+**Achtung:** Die Datenbank-Testfixtures löschen Schemas. Nie Produktionsdaten verwenden.
+
 **Lektionen im fremden Format.** Der **Lektionsautor** schreibt die Lektion auf Grundlage des geprüften Konzepts (Niveaus, Fehlvorstellungen mit bekannten falschen Antworten, Beispielaufgaben, Voraussetzungen) genau im mitgeschickten Schema. Geprüft wird automatisch: Schema, kein HTML/SVG/Skript, nur Komponenten und Parameter aus dem Register – dann das Veto des Kinderrechts-Inspektors. Die Lektion wird pro *Konzeptversion × Klasse × Format* vorgehalten: das nächste Kind bekommt sie ohne KI-Aufruf. Ist das Thema neu, wartet die Lektion auf den Auftrag und wird geschrieben, sobald das Konzept freigegeben ist – noch vor dem Vervollständigen im Hintergrund.
 
 **Latenz** (gemessen, 2 CPU-Kerne): Sofortsuche p50 4 ms / p95 6 ms nacheinander, p95 ≈ 40 ms bei 10 gleichzeitigen Anfragen mit 4 Prozessen; fertige Lektion aus Sicht von Karo ≈ 9 ms. `kcteam bench` misst das bei dir. Mehr Abonnenten: `KCTEAM_API_WORKERS` erhöhen, der Agent skaliert getrennt davon.

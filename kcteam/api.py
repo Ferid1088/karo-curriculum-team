@@ -115,9 +115,13 @@ def create_app(db: DB | None = None, webhooks: bool = False) -> FastAPI:
             from .webhooks import Dispatcher
             disp = Dispatcher(get_db())
             disp.start()
-        yield
-        if disp:
-            disp.shutdown()
+        try:
+            yield
+        finally:
+            if disp:
+                disp.shutdown()
+            if db is None and state["db"] is not None:
+                state["db"].close_all()
 
     app = FastAPI(title="Karo Curriculum-Service", version="1", docs_url="/docs", redoc_url=None, lifespan=lifespan)
     touch: dict[int, float] = {}

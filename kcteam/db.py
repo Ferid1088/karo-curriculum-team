@@ -52,11 +52,24 @@ class DB:
             raise ValueError("DATABASE_URL ist nicht gesetzt")
         self.url = url
         self._local = threading.local()
-        self._all: list[psycopg.Connection] = []
+        self._all: list[tuple[threading.Thread, psycopg.Connection]] = []
         self._lock = threading.Lock()
 
     # Eine Verbindung pro Thread (Konzepte laufen parallel); Keepalive gegen Abbrüche bei langen KI-Aufrufen
     def _conn(self) -> psycopg.Connection:
+        # Short-lived concept executors must not retain one PostgreSQL session
+        # per historical thread forever. Never close a live thread's connection.
+        with self._lock:
+            alive = []
+            for owner, existing in self._all:
+                if not owner.is_alive():
+                    try:
+                        existing.close()
+                    except Exception:  # noqa: BLE001
+                        pass
+                elif not existing.closed:
+                    alive.append((owner, existing))
+            self._all = alive
         conn = getattr(self._local, "conn", None)
         if conn is None or conn.closed or conn.broken:
             conn = psycopg.connect(self.url, row_factory=dict_row, autocommit=False,
@@ -65,12 +78,12 @@ class DB:
                                    connect_timeout=15)
             self._local.conn = conn
             with self._lock:
-                self._all = [c for c in self._all if not c.closed] + [conn]
+                self._all.append((threading.current_thread(), conn))
         return conn
 
     def close_all(self) -> None:
         with self._lock:
-            for c in self._all:
+            for _owner, c in self._all:
                 try:
                     c.close()
                 except Exception:  # noqa: BLE001
