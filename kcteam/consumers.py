@@ -15,9 +15,12 @@ Der Dienst bleibt dabei fuer alle Abnehmer da: hier steht nichts ueber Karo
 ausser der Zeile, die Karos Paket eintraegt. Ein Format ohne Eintrag wird
 weiterhin nur gegen sein eigenes Schema geprueft.
 
-Fehlt das Paket eines Abnehmers, laeuft der Dienst ohne dessen Pruefung
-weiter und sagt es einmal. Ein Abnehmer, der sein Paket nicht installiert
-hat, darf die anderen nicht aufhalten.
+Fehlt das Paket eines eingetragenen Abnehmers oder hat es die falsche
+Fassung, wird fuer dieses Format **nichts** ausgeliefert: der Export bleibt
+`unavailable` mit `consumer_check_missing`, und ein Mensch bekommt es auf den
+Tisch. Ungeprueft zu liefern waere das Schlimmste von beidem — es sieht aus
+wie Betrieb, und der Abnehmer verwirft dann jede Lieferung. Formate ohne
+Eintrag sind davon nicht betroffen und laufen weiter wie bisher.
 """
 from __future__ import annotations
 
@@ -43,6 +46,10 @@ class Abnehmer:
 
     befunde: Callable[[Any, dict], list[str]]
     einordnung: Callable[[Any, dict], list[str]]
+    #: Gibt None zurueck, wenn geprueft werden kann — sonst den Grund,
+    #: warum nicht. Solange ein Grund da ist, wird fuer dieses Format nichts
+    #: fertig: lieber nichts liefern als ungeprueft liefern.
+    bereit: Callable[[], str | None] = lambda: None
 
 
 _REGISTER: dict[str, Abnehmer] = {}
@@ -57,6 +64,20 @@ def register(format_id: str, abnehmer: Abnehmer) -> None:
 
 def registriert() -> tuple[str, ...]:
     return tuple(sorted(_REGISTER))
+
+
+def nicht_pruefbar(spec: dict) -> str | None:
+    """Warum die Pruefung dieses Abnehmers gerade nicht laufen kann.
+
+    None heisst: sie kann laufen (oder es gibt fuer dieses Format keine).
+    """
+    abnehmer = _REGISTER.get((spec or {}).get("id") or "")
+    if abnehmer is None:
+        return None
+    try:
+        return abnehmer.bereit()
+    except Exception as exc:                        # noqa: BLE001
+        return f"Die Pruefung des Abnehmers laesst sich nicht laden: {exc}"
 
 
 def _ruf(was: str, lesson: Any, umschlag: dict, spec: dict) -> list[str]:
@@ -85,6 +106,23 @@ def einordnung(lesson: Any, umschlag: dict, spec: dict) -> list[str]:
     return _ruf("einordnung", lesson, umschlag, spec)
 
 
+def _karo_bereit() -> str | None:
+    """Ist Karos Paket da, und in der Fassung, die dieser Dienst erwartet?"""
+    from .lessons import CONTRACT_VERSION
+    try:
+        import karo_contract
+    except ImportError as exc:
+        return ('karo_contract ist nicht installiert (%s). Ohne das Paket kann der '
+                'Dienst nicht pruefen, was Karo annehmen wuerde. Installieren: '
+                'pip install "karo-contract @ git+https://github.com/Ferid1088/karo.git'
+                '@contract-%s"' % (exc, CONTRACT_VERSION.removeprefix("karo-adaptiv-")))
+    fremd = getattr(karo_contract, "CONTRACT_VERSION", None)
+    if fremd != CONTRACT_VERSION:
+        return (f"karo_contract spricht {fremd or '(keine Angabe)'}, dieser Dienst "
+                f"{CONTRACT_VERSION}. Eine Pruefung aus der falschen Fassung ist keine.")
+    return None
+
+
 def _karo_befunde(lesson: Any, umschlag: dict) -> list[str]:
     import karo_contract
     return karo_contract.befunde({**umschlag, "lesson": lesson},
@@ -104,12 +142,12 @@ def _karo_einordnung(lesson: Any, umschlag: dict) -> list[str]:
     return []
 
 
-try:
-    import karo_contract as _kc
-except ImportError:                                 # pragma: no cover
-    log.warning("karo_contract ist nicht installiert – Lektionen fuer Karo werden "
-                "nur gegen das mitgeschickte Schema geprueft. "
-                'Installieren: pip install "karo-contract @ '
-                'git+https://github.com/Ferid1088/karo.git"')
-else:
-    register(_kc.FORMAT_ID, Abnehmer(befunde=_karo_befunde, einordnung=_karo_einordnung))
+#: Karos Format steht hier unabhaengig davon, ob sein Paket gerade da ist.
+#: Genau darum geht es: ein eingetragener Abnehmer ohne Pruefung bekommt
+#: nichts, statt still ungeprueftes Material zu bekommen.
+register("karo-adaptiv-v1", Abnehmer(befunde=_karo_befunde, einordnung=_karo_einordnung,
+                                     bereit=_karo_bereit))
+
+_grund = nicht_pruefbar({"id": "karo-adaptiv-v1"})
+if _grund:                                          # pragma: no cover
+    log.warning("Fuer karo-adaptiv-v1 wird nichts ausgeliefert: %s", _grund)

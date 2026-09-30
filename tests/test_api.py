@@ -640,3 +640,50 @@ def test_the_same_topic_from_two_families_stays_one_job(env):
     assert auftrag["requested_count"] == 2
     # Die Familie mit der frueheren Arbeit zieht den gemeinsamen Auftrag vor.
     assert auftrag["needed_by"].isoformat() == "2027-10-10"
+
+
+def test_without_the_consumer_package_nothing_is_delivered(env, monkeypatch):
+    """Paket weg → keine Lieferung für karo-adaptiv-v1, und ein Mensch erfaehrt es.
+
+    Vorher lief der Dienst in dem Fall einfach ohne die Pruefung weiter. Das
+    ist das Schlimmste von beidem: es sieht aus wie Betrieb, und Karo verwirft
+    dann jede Lieferung — nach zweimal ist sein Thema dauerhaft unlieferbar.
+    """
+    from kcteam import consumers, review
+    api, key, agent, db = env["api"], env["key"], env["agent"], env["db"]
+    db.query("DELETE FROM curriculum.lesson_exports WHERE concept_id='MA.BRUECHE.GLEICHN_ADD'")
+    monkeypatch.setitem(consumers._REGISTER, "karo-adaptiv-v1",
+                        consumers.Abnehmer(befunde=lambda l, u: [], einordnung=lambda l, u: [],
+                                           bereit=lambda: "karo_contract ist nicht installiert"))
+    eid = api.post("/v1/lessons", json=lesson_body(grade=6, concept_id="MA.BRUECHE.GLEICHN_ADD",
+                                                   topic="gleichnamige addieren"),
+                   headers=h(key)).json()["export_id"]
+    vorher = env["prov"].calls
+    def abarbeiten(ziel):
+        """Die Schlange bis zu diesem Auftrag abarbeiten (andere Tests haben welche hinterlassen)."""
+        for _ in range(20):
+            stand = db.one("SELECT status FROM curriculum.lesson_exports WHERE id=%s", (ziel,))["status"]
+            if stand not in ("queued", "waiting", "running"):
+                return stand
+            assert agent.process_export() is True, "Auftrag blieb in der Schlange"
+        raise AssertionError("Auftrag wurde nicht abgearbeitet")
+    abarbeiten(eid)
+    # Kein Modellaufruf fuer diesen Auftrag: es wird gar nicht erst
+    # geschrieben, was niemand pruefen kann.
+    assert env["prov"].calls == vorher
+    row = db.one("SELECT status, reason_code FROM curriculum.lesson_exports WHERE id=%s", (eid,))
+    assert (row["status"], row["reason_code"]) == ("unavailable", "consumer_check_missing")
+    antwort = api.get(f"/v1/lessons/{eid}", headers=h(key)).json()
+    assert antwort["status"] == "unavailable" and antwort["reason_code"] == "consumer_check_missing"
+    assert "lesson" not in antwort
+    assert any(x["entity_id"] == f"EXP-{eid}" and "nichts ausgeliefert" in (x["reason"] or "")
+               for x in review.list_open(db))
+
+    # Ein anderes Format ist davon nicht betroffen.
+    fremd = {**KARO, "id": "irgendein-anderer-abnehmer-v3"}
+    andere = api.post("/v1/lessons", json=lesson_body(grade=6, format=fremd,
+                                                      concept_id="MA.BRUECHE.GLEICHN_ADD",
+                                                      topic="gleichnamige addieren"),
+                      headers=h(key)).json()
+    assert andere["status"] == "pending"
+    assert abarbeiten(andere["export_id"]) == "ready"

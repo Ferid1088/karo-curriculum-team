@@ -559,6 +559,16 @@ def grounding(db, concept_id: str, grade: int, topic: str | None) -> dict:
 def generate(pipe, db, row: dict) -> tuple[str, Any, str | None]:
     """Erzeugt die Lektion für einen Export. Gibt (status, lektion, grund) zurück."""
     spec = row["format_spec"]
+    fehlt = consumers.nicht_pruefbar(spec)
+    if fehlt:
+        # Eingetragener Abnehmer, aber seine Pruefung laesst sich nicht laden.
+        # Ungeprueft zu liefern waere das Schlimmste von beidem: es sieht aus
+        # wie Betrieb, und der Abnehmer verwirft dann jede Lieferung — was
+        # sein Thema nach zweimal dauerhaft unlieferbar macht.
+        db.enqueue_human("export", f"EXP-{row['id']}", "lesson",
+                         f"Fuer {spec.get('id')} wird nichts ausgeliefert: {fehlt}"[:500],
+                         {}, kind="error", urgent=True)
+        return "unavailable", None, "consumer_check_missing"
     c = db.concept(row["concept_id"])
     if not c or c["status"] != "approved":
         return "unavailable", None, "concept_not_approved"
@@ -659,6 +669,10 @@ def admin_approve_export(db, eid: int, raw: Any) -> str:
     concept = db.concept(row['concept_id']) if row else None
     if not concept or concept['status'] != 'approved' or concept['version'] != row['concept_version']:
         raise ValueError('Das Konzept ist nicht in dieser Version freigegeben')
+    fehlt = consumers.nicht_pruefbar(row['format_spec'])
+    if fehlt:
+        # Auch ein Mensch kann nichts freigeben, was niemand pruefen konnte.
+        raise ValueError(f"Fuer {row['format_spec'].get('id')} wird nichts ausgeliefert: {fehlt}")
     fach = db.one("SELECT name FROM curriculum.subjects WHERE code=%s", (concept['subject_code'],))
     errors = check_lesson(raw, row['format_spec']) + consumer_findings(
         raw, concept, row['format_spec'], version=row['concept_version'],
