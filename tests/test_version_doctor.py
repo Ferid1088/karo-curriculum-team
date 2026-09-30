@@ -96,3 +96,35 @@ def test_doctor_bricht_ab_wenn_die_staende_auseinanderlaufen(db, monkeypatch, ca
     for dienst in ("api", "agent", "admin"):
         _melden(db, dienst, "gleich000000")
     assert cli.main(["doctor"]) == 0
+
+
+def test_kosten_rechnet_mit_median_statt_mittelwert(db, monkeypatch, capsys):
+    """Ein einziges dauernd scheiterndes Thema verdreifacht sonst die Zahl.
+
+    Genau so sah es im Betrieb aus: 103 Aufrufe fuer ein Thema, davon 95
+    fehlgeschlagen — neben zehn fuer ein gesundes.
+    """
+    from kcteam import cli
+    db.query("DELETE FROM curriculum.agent_calls")
+    for thema, aufrufe, fehler in (("gesund a", 10, 0), ("gesund b", 8, 1), ("kaputt", 103, 95)):
+        for i in range(aufrufe):
+            db.query("""INSERT INTO curriculum.agent_calls(role, provider, topic, ok,
+                          input_tokens, output_tokens)
+                        VALUES ('lektionsautor','mock',%s,%s,100,50)""", (thema, i >= fehler))
+    monkeypatch.setenv("DATABASE_URL", URL)
+    assert cli.main(["kosten", "--themen", "20"]) == 0
+    aus = capsys.readouterr().out
+    assert "Median      10.0" in aus
+    assert "nach Median    200" in aus
+    assert "davon 95 fehlgeschlagen" in aus
+    # Der Mittelwert steht daneben, aber als das, was er ist.
+    assert "hochgezogen" in aus
+    db.query("DELETE FROM curriculum.agent_calls")
+
+
+def test_kosten_ohne_daten_sagt_das_auch(db, monkeypatch, capsys):
+    from kcteam import cli
+    db.query("DELETE FROM curriculum.agent_calls")
+    monkeypatch.setenv("DATABASE_URL", URL)
+    assert cli.main(["kosten"]) == 0
+    assert "Noch keine Modellaufrufe" in capsys.readouterr().out

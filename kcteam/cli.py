@@ -6,6 +6,7 @@
   python -m kcteam review list | show ID | approve ID | reject ID | retry ID  [--note "..."]
   python -m kcteam review unblock-export MA.BRUECHE 5 karo-adaptiv-v1   Thema wieder freigeben
   python -m kcteam doctor                     laufen alle Dienste auf demselben Stand?
+  python -m kcteam kosten --themen 20         was 20 Themen am Tag an Modellaufrufen kosten
   python -m kcteam export --subject Mathematik
   python -m kcteam preview -b MA.BRUECHE   HTML-Vorschau der Visuals
   python -m kcteam catalog             HTML-Galerie aller Visual-Typen
@@ -247,6 +248,42 @@ def _abnehmer_pruefbar() -> int:
         print("\nDer Dienst startet nicht, weil er fuer diese Abnehmer nichts ausliefern koennte.")
         print("Siehe README, Abschnitt „Vertrag ändern“.")
     return 1 if gruende else 0
+
+
+def cmd_kosten(cfg, args) -> int:
+    """Was ein Thema an Modellaufrufen kostet — gemessen, nicht geschaetzt.
+
+    Grundlage fuer KCTEAM_DAILY_AGENT_CALLS. Der Mittelwert ist hier
+    irrefuehrend: ein einziges Thema, das immer wieder scheiterte, zieht ihn
+    um ein Vielfaches hoch. Deshalb steht der Median daneben, und beide
+    Rechnungen werden gezeigt.
+    """
+    db = DB(cfg.database_url)
+    db.migrate()
+    rows = db.query("SELECT topic, calls, failed, tokens FROM curriculum.topic_cost ORDER BY calls DESC")
+    if not rows:
+        print("Noch keine Modellaufrufe mit Thema protokolliert.")
+        print("Sie entstehen im Betrieb; `curriculum.topic_of` traegt sie ein.")
+        return 0
+    zahlen = sorted(r["calls"] for r in rows)
+    mitte = len(zahlen) // 2
+    median = zahlen[mitte] if len(zahlen) % 2 else (zahlen[mitte - 1] + zahlen[mitte]) / 2
+    schnitt = sum(zahlen) / len(zahlen)
+    print(f"{len(rows)} Themen protokolliert\n")
+    for r in rows[:int(args.zeilen)]:
+        fehl = f", davon {r['failed']} fehlgeschlagen" if r["failed"] else ""
+        print(f"  {r['calls']:5} Aufrufe{fehl:28}  {r['topic']}")
+    print(f"\n  Median   {median:7.1f} Aufrufe je Thema")
+    print(f"  Mittel   {schnitt:7.1f} Aufrufe je Thema  (vom teuersten Thema hochgezogen)")
+    print(f"  Hoechste {max(zahlen):7} Aufrufe fuer ein einziges Thema")
+    if args.themen:
+        n = int(args.themen)
+        print(f"\nFuer {n} Themen am Tag:")
+        print(f"  nach Median {int(median * n):6} Aufrufe")
+        print(f"  nach Mittel {int(schnitt * n):6} Aufrufe")
+        print("\nKCTEAM_DAILY_AGENT_CALLS sollte darueber liegen, aber unter dem, was das "
+              "Abo am Tag hergibt.")
+    return 0
 
 
 def cmd_doctor(cfg, args) -> int:
@@ -662,6 +699,10 @@ def main(argv: list[str] | None = None) -> int:
     p = sub.add_parser("status", help="Stand der Datenbank")
     p.add_argument("--subject", "-s")
 
+    p = sub.add_parser("kosten", help="was ein Thema an Modellaufrufen kostet (gemessen)")
+    p.add_argument("--zeilen", "-n", default=10, help="wie viele Themen einzeln zeigen")
+    p.add_argument("--themen", "-t", help="Rechnung fuer so viele Themen am Tag")
+
     p = sub.add_parser("doctor", help="laufen alle Dienste auf demselben Stand?")
     p.add_argument("--dienst", "-d", action="append",
                    help="nur diese Dienste prüfen (mehrfach angebbar)")
@@ -747,7 +788,7 @@ def main(argv: list[str] | None = None) -> int:
     if cmd == "run" and not hasattr(args, "subject"):
         args = parser.parse_args(["run"])
     handlers = {"run": cmd_run, "status": cmd_status, "review": cmd_review, "export": cmd_export,
-                "doctor": cmd_doctor,
+                "doctor": cmd_doctor, "kosten": cmd_kosten,
                 "providers": cmd_providers, "init-db": cmd_init_db, "preview": cmd_preview,
                 "catalog": cmd_catalog, "subjects": cmd_subjects, "check": cmd_check, "simulate": cmd_simulate,
                 "serve": cmd_serve, "request": cmd_request, "export-sqlite": cmd_export_sqlite, "requests": cmd_requests, "demand": cmd_demand,

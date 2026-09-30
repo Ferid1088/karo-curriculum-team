@@ -46,3 +46,10 @@ SELECT a.topic,
   FROM curriculum.agent_calls a
  WHERE a.topic IS NOT NULL
  GROUP BY a.topic;
+
+-- Was vor dieser Aenderung protokolliert wurde, hat noch kein Thema. Ohne
+-- Nachtrag faengt die Kostenrechnung bei null an und die erste Aussage
+-- darueber, was ein Thema kostet, kaeme Wochen zu spaet.
+UPDATE curriculum.agent_calls SET topic = curriculum.topic_of(entity_id)
+ WHERE topic IS NULL AND entity_id IS NOT NULL
+   AND created_at > now() - interval '180 days';
