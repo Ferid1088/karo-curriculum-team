@@ -248,7 +248,10 @@ class MockProvider(Provider):
     def _curriculum_agent(self, meta):
         p = meta.get("payload", {})
         a = p["anfrage"]
-        topic, g, code = a["thema"], a["klasse"], a["fachkuerzel"]
+        topic, code = a["thema"], a["fachkuerzel"]
+        # Synthetic on-demand examples have a fixed curriculum level. The
+        # production matcher intentionally receives no requesting child's class.
+        g = 7
         low = topic.lower()
         if "raumfahrt" in low:
             return {"decision": "out_of_scope", "reason": "Kein Schulstoff dieses Fachs."}
@@ -283,7 +286,6 @@ class MockProvider(Provider):
         if "fehlertypen" not in (schema.get("properties") or {}):
             return _fill(schema)
         k = p["konzept"]
-        g = p["klasse"]
         topic = p.get("thema_des_abnehmers") or k["title"]
         wette = "Wette" in topic and ("immer" in topic or "Glücksspiel" not in fb)
         reg = {r["component"] for r in meta.get("registry") or []}
@@ -329,8 +331,8 @@ class MockProvider(Provider):
         slug = re.sub(r"[^a-z0-9]+", "-", k["id"].lower()).strip("-")
         return {
             "konzept": {"konzept_key": slug, "thema_key": slug.split("-")[1] if "-" in slug else slug,
-                        "label": k["title"], "klasse_von": min(k.get("first_contact_grade") or g, g),
-                        "klasse_bis": g, "stichworte": [k["title"]]},
+                        "label": k["title"], "klasse_von": k['first_contact_grade'],
+                        "klasse_bis": k['target_grade'], "stichworte": [k["title"]]},
             "erstkontakt": {"anker": "Du hast 2 Stifte und bekommst 1 dazu. Wie viele hast du?",
                             "erste_aufgabe": {"frage": "Was ist 2 + 1?", "loesung": "3"},
                             "benennung": k["title"]},

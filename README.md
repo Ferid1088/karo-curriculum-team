@@ -340,6 +340,16 @@ kcteam requests                                                               # 
 
 ## Curriculum-Service über HTTP – so nutzt Karo den Agenten
 
+**Profilklasse ist keine Inhaltsklasse.** Eine Anfrage außerhalb des curricularen
+Bereichs verwendet weiterhin das freigegebene Konzept. Das Unterrichtsniveau eines
+Exports wird auf dessen `first_contact_grade` bis `target_grade` begrenzt. Fertige
+API-Antworten liefern `classification: {source: "approved_curriculum",
+first_contact_grade: …, target_grade: …}` aus der Datenbank, nicht aus der Anfrage.
+Im Karo-Format müssen `konzept.klasse_von/klasse_bis` exakt dazu passen; das wird
+vor Freigabe und Auslieferung geprüft. Neue Konzepte werden unabhängig von der
+Profilklasse eingeordnet und vom Inspektor geprüft. Die App übernimmt den Hinweis
+an das Kind und die Elternbenachrichtigung; der Dienst erhält keine Lernhistorie.
+
 Der Agent bleibt ein **eigenständiger Dienst**: Karo kennt weder seine Datenbank noch seine Agenten, nur eine kleine HTTP-API. Andere Apps können ihn genauso nutzen.
 
 ```

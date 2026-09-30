@@ -259,7 +259,7 @@ def create_app(db: DB | None = None, webhooks: bool = False) -> FastAPI:
                     row = lessons.request_export(d, client_id=c["id"], spec=spec, grade=body.grade,
                                                  concept_id=body.concept_id, topic=body.topic)
                     _link(row["id"], c["id"])
-                    return lessons.export_response(row)
+                    return lessons.export_response(row, d)
                 r = _resolve(c, body)
                 st = r.get("status")
                 if st in ("found", "other_level"):
@@ -274,7 +274,7 @@ def create_app(db: DB | None = None, webhooks: bool = False) -> FastAPI:
             except lessons.FormatInvalid as exc:
                 return 422, {"detail": str(exc)}
             _link(row["id"], c["id"])
-            code, out = lessons.export_response(row)
+            code, out = lessons.export_response(row, d)
             if r.get("request_id"):
                 out["request_id"] = r["request_id"]
             return code, out
@@ -289,7 +289,7 @@ def create_app(db: DB | None = None, webhooks: bool = False) -> FastAPI:
 
     @app.get("/v1/lessons/{eid}")
     def lesson_status(eid: int, c: dict = Depends(client)):
-        code, out = lessons.export_response(_own_export(eid, c))
+        code, out = lessons.export_response(_own_export(eid, c), get_db())
         headers = {"Retry-After": str(out["retry_after"])} if code == 202 else None
         return JSONResponse(out, code, headers=headers)
 
@@ -308,7 +308,7 @@ def create_app(db: DB | None = None, webhooks: bool = False) -> FastAPI:
             d.enqueue_human("export", f"EXP-{eid}", "lesson",
                             f"{new.get('rejections')}× vom Abnehmer {c['name']} verworfen: {body.reason[:300]}",
                             {"content": row["lesson"], "raw": row["lesson"]}, kind="error")
-        code, out = lessons.export_response(new)
+        code, out = lessons.export_response(new, get_db())
         return JSONResponse(out, code)
 
     return app

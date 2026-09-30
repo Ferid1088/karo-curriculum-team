@@ -196,6 +196,25 @@ def _unavailable(reason: str, spec_id: str, concept_id=None, version=None) -> di
             "concept_id": concept_id, "concept_version": version}
 
 
+def content_grade(concept: dict, requested: int) -> int:
+    """An export's teaching level stays inside its approved curricular range."""
+    lo, hi = concept['first_contact_grade'], concept['target_grade']
+    if not 1 <= lo <= hi <= 13:
+        raise FormatInvalid('Die curriculare Klasseneinordnung ist ungültig')
+    return min(hi, max(lo, requested))
+
+
+def classification_errors(lesson: Any, concept: dict, spec: dict) -> list[str]:
+    # Other clients may not have level fields; Karo must carry canonical values.
+    if spec['id'] != 'karo-adaptiv-v1':
+        return []
+    metadata = lesson.get('konzept', {}) if isinstance(lesson, dict) else {}
+    if (metadata.get('klasse_von'), metadata.get('klasse_bis')) != (
+            concept['first_contact_grade'], concept['target_grade']):
+        return ['Klassenbereich muss exakt first_contact_grade/target_grade des freigegebenen Konzepts entsprechen.']
+    return []
+
+
 def request_export(db, *, client_id: int | None, spec: dict, grade: int, concept_id: str | None = None,
                    topic: str | None = None, request_id: int | None = None) -> dict:
     """Gibt einen vorhandenen gültigen Export zurück oder legt einen neuen an (wartend, wenn das Konzept
@@ -204,10 +223,11 @@ def request_export(db, *, client_id: int | None, spec: dict, grade: int, concept
     cl = client_id or 0
     with db.tx() as cur:
         if concept_id:
-            cur.execute("SELECT version, status FROM curriculum.concepts WHERE id=%s", (concept_id,))
+            cur.execute("SELECT version, status, first_contact_grade, target_grade FROM curriculum.concepts WHERE id=%s", (concept_id,))
             c = cur.fetchone()
             if not c or c["status"] != "approved":
                 raise FormatInvalid(f"Konzept {concept_id} ist nicht freigegeben")
+            grade = content_grade(c, grade)
             _lock(cur, _key(concept_id, c["version"], grade, fhash))
             cur.execute(_LOOKUP, {"c": concept_id, "v": c["version"], "g": grade, "h": fhash, "live": list(LIVE),
                                   "cl": cl})
@@ -295,13 +315,16 @@ def promote_waiting(db) -> int:
                     give_up(cur, r["id"], "no_concept")
                     moved += 1
                 continue
-            cur.execute("SELECT version, status FROM curriculum.concepts WHERE id=%s", (cid,))
+            cur.execute("SELECT version, status, first_contact_grade, target_grade FROM curriculum.concepts WHERE id=%s", (cid,))
             c = cur.fetchone()
             if not c or c["status"] != "approved":
                 if r["r_status"] == "done" or not c or c["status"] == "retired":
                     give_up(cur, r["id"], "concept_not_approved")
                     moved += 1
                 continue
+            r['grade'] = content_grade(c, r['grade'])
+            cur.execute("UPDATE curriculum.lesson_exports SET grade=%s WHERE id=%s AND status='waiting'",
+                        (r['grade'], r['id']))
             _lock(cur, _key(cid, c["version"], r["grade"], r["format_hash"]))
             cur.execute("""SELECT * FROM curriculum.lesson_exports
                            WHERE concept_id=%s AND concept_version=%s AND grade=%s AND format_hash=%s
@@ -399,6 +422,9 @@ def generate(pipe, db, row: dict) -> tuple[str, Any, str | None]:
     c = db.concept(row["concept_id"])
     if not c or c["status"] != "approved":
         return "unavailable", None, "concept_not_approved"
+    if c['version'] != row['concept_version']:
+        return 'unavailable', None, 'concept_version_changed'
+    row = {**row, 'grade': content_grade(c, row['grade'])}
     data = grounding(db, row["concept_id"], row["grade"], row["topic"])
     extra = ("## Format des Abnehmers\n### Register erlaubter Darstellungen\n```json\n" + compact(spec["registry"])
              + "\n```\n### Formatregeln des Abnehmers\n" + (spec["instructions"] or "(keine)"))
@@ -412,7 +438,7 @@ def generate(pipe, db, row: dict) -> tuple[str, Any, str | None]:
     eid = f"EXP-{row['id']}"
 
     def validate(obj):
-        errs = check_lesson(obj, spec)
+        errs = check_lesson(obj, spec) + classification_errors(obj, c, spec)
         if errs:
             raise ValueError("Die Lektion passt nicht zum Format:\n- " + "\n- ".join(errs))
         return obj
@@ -433,7 +459,7 @@ def generate(pipe, db, row: dict) -> tuple[str, Any, str | None]:
     return "ready", lesson, None
 
 
-def export_response(row: dict) -> tuple[int, dict]:
+def export_response(row: dict, db=None) -> tuple[int, dict]:
     """Antwort der API zu einem Export (HTTP-Status, Körper)."""
     if row.get("id") is None:          # kein Export angelegt (z. B. zu oft verworfen)
         return 200, {"export_id": None, "status": "unavailable", "reason_code": row.get("reason_code"),
@@ -442,6 +468,14 @@ def export_response(row: dict) -> tuple[int, dict]:
     base = {"export_id": row["id"], "format": row["format_id"], "concept_id": row["concept_id"],
             "concept_version": row["concept_version"]}
     if row["status"] == "ready":
+        if db is not None:
+            concept = db.concept(row['concept_id'])
+            if (not concept or concept['status'] != 'approved'
+                    or concept['version'] != row['concept_version']
+                    or classification_errors(row['lesson'], concept, {'id': row['format_id']})):
+                return 200, {**base, 'status': 'unavailable', 'reason_code': 'classification_needs_review'}
+            base['classification'] = dict(source='approved_curriculum',
+                first_contact_grade=concept['first_contact_grade'], target_grade=concept['target_grade'])
         return 200, {**base, "status": "ready", "lesson": row["lesson"]}
     if row["status"] in ("waiting", "queued", "running"):
         return 202, {**base, "status": "pending", "stage": row["status"], "retry_after": 15}
@@ -451,6 +485,13 @@ def export_response(row: dict) -> tuple[int, dict]:
 def admin_approve_export(db, eid: int, raw: Any) -> str:
     if raw is None:
         raise ValueError("Kein Entwurf gespeichert")
+    row = db.one('SELECT * FROM curriculum.lesson_exports WHERE id=%s', (eid,))
+    concept = db.concept(row['concept_id']) if row else None
+    if not concept or concept['status'] != 'approved' or concept['version'] != row['concept_version']:
+        raise ValueError('Das Konzept ist nicht in dieser Version freigegeben')
+    errors = check_lesson(raw, row['format_spec']) + classification_errors(raw, concept, row['format_spec'])
+    if errors:
+        raise ValueError('; '.join(errors))
     finish_export(db, eid, "ready", raw, message="vom Menschen freigegeben")
     return f"Export #{eid}: vom Menschen freigegeben"
 

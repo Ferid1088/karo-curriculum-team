@@ -390,19 +390,18 @@ class CurriculumAgent:
 
     # ------------------------------------------------------------ Zuordnen
     def _context(self, req: dict, code: str, tasks: list[str]) -> dict:
-        g = req["grade"]
         cands = self.db.query("""SELECT m.concept_id AS id, m.title, m.target_grade, m.status,
                                         round(m.score::numeric, 2) AS score, left(c.description, 200) AS description
                                  FROM curriculum.match_concepts(%s, curriculum._words(%s), 25, true) m
                                  JOIN curriculum.concepts c ON c.id = m.concept_id""",
                               (code, req["topic"] + " " + " ".join(req["keywords"] or [])))
         allc = self.db.query("""SELECT id, title, target_grade, status FROM curriculum.concepts
-                                WHERE subject_code=%s AND status NOT IN ('retired') AND target_grade <= %s
-                                ORDER BY target_grade, id""", (code, g + 2))
+                                WHERE subject_code=%s AND status NOT IN ('retired')
+                                ORDER BY target_grade, id""", (code,))
         blocks = self.db.query("""SELECT id, title, grade_min, grade_max FROM curriculum.topic_blocks
                                   WHERE subject_code=%s ORDER BY grade_min, id""", (code,))
         return {"anfrage": {"fach": self.db.one("SELECT name FROM curriculum.subjects WHERE code=%s", (code,))["name"],
-                            "fachkuerzel": code, "klasse": g, "thema": req["topic"], "stichworte": req["keywords"]},
+                            "fachkuerzel": code, "thema": req["topic"], "stichworte": req["keywords"]},
                 "arbeitsblatt_aufgaben": tasks,
                 "kandidaten": [{**c, "score": float(c["score"])} for c in cands],
                 "alle_konzepte": [[c["id"], c["title"], c["target_grade"], c["status"]] for c in allc],
@@ -471,10 +470,13 @@ class CurriculumAgent:
             return {"anfrage": req["topic"],
                     "neuer_block": ({"title": x.new_block.title, "description": x.new_block.description}
                                     if x.new_block else None),
-                    "konzepte": [{"id": c.id, "title": c.title, "description": c.description, "klasse": c.target_grade}
+                    "pruefauftrag": "Prüfe die typische curriculare Klasseneinordnung unabhängig von der Profilklasse; bei unklarer oder unplausibler Einordnung keine Freigabe.",
+                    "konzepte": [{"id": c.id, "title": c.title, "description": c.description,
+                                  "first_contact_grade": c.first_contact_grade, "target_grade": c.target_grade}
                                  for c in x.concepts]}
 
-        return pipe.gated(entity_type="request", entity_id=f"REQ-{rid}", stage="graph", grade_hint=str(req["grade"]),
+        return pipe.gated(entity_type="request", entity_id=f"REQ-{rid}", stage="graph",
+                          grade_hint='Curriculare Einordnung des Konzepts, nicht die Klasse des anfragenden Kindes',
                           produce=produce, to_content=content, initial_feedback=note)
 
     def save_new(self, code: str, m: TopicMatch, terms: list[str], tasks: list[str]) -> list[str]:
