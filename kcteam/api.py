@@ -287,6 +287,24 @@ def create_app(db: DB | None = None, webhooks: bool = False) -> FastAPI:
             raise HTTPException(404, "Lektion nicht gefunden")
         return row
 
+    @app.get("/v1/meta")
+    def meta():
+        """Wer bin ich und nach welchem Vertrag rede ich?
+
+        Ein Abnehmer fragt das, bevor er einen Auftrag stellt. Laufen die
+        Vertragsfassungen auseinander, stellt er zurueck statt Lieferungen
+        abzulehnen — sonst zaehlt der Dienst Ablehnungen, die nichts mit dem
+        Inhalt zu tun haben, und sperrt das Thema dauerhaft.
+
+        Ohne Schluessel erreichbar: die Angaben sind nicht vertraulich, und
+        ein Abnehmer muss die Fassungen vergleichen koennen, bevor er sich
+        anmeldet.
+        """
+        import os
+        return {"contract_version": lessons.CONTRACT_VERSION,
+                "git_sha": os.environ.get("KCTEAM_GIT_SHA", "unbekannt"),
+                "formats": list(lessons.SUPPORTED_FORMATS)}
+
     @app.get("/v1/lessons/{eid}")
     def lesson_status(eid: int, c: dict = Depends(client)):
         code, out = lessons.export_response(_own_export(eid, c), get_db())

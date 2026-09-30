@@ -321,3 +321,16 @@ def test_webhook_signature_and_delivery(env):
     assert verify(c["webhook_secret"], got[0][1], got[0][0])
     row = db.one("SELECT * FROM curriculum.webhook_deliveries ORDER BY id DESC LIMIT 1")
     assert row["delivered_at"] and row["status_code"] == 200
+
+
+def test_meta_nennt_vertrag_stand_und_formate(env):
+    """Ein Abnehmer muss die Vertragsfassung erfragen koennen, bevor er
+    Auftraege stellt — sonst bemerkt er einen Versionsunterschied erst an
+    abgelehnten Lieferungen, und die zaehlen gegen ihn."""
+    from kcteam import lessons
+    r = env["api"].get("/v1/meta")            # ohne Schluessel erreichbar
+    assert r.status_code == 200
+    d = r.json()
+    assert d["contract_version"] == lessons.CONTRACT_VERSION
+    assert d["formats"] == list(lessons.SUPPORTED_FORMATS)
+    assert "git_sha" in d

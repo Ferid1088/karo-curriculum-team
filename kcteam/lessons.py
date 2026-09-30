@@ -9,6 +9,18 @@ Modellaufruf. Ändert sich das Konzept (neue Version) oder das Format (neuer Has
 """
 from __future__ import annotations
 
+#: Die Fassung des Vertrags zwischen Dienst und Abnehmer. Sie steigt, sobald
+#: sich Pflichtfelder der Antwort aendern. Karo vergleicht sie vor jedem
+#: Auftrag ueber /v1/meta und stellt zurueck statt abzulehnen, wenn die
+#: Fassungen auseinanderlaufen — ein Versionsunterschied hat schon einmal
+#: jedes Thema dauerhaft unlieferbar gemacht.
+CONTRACT_VERSION = "karo-adaptiv-v1.1"
+
+#: Formate, fuer die dieser Dienst eine eigene Pruefung mitbringt. Fuer alles
+#: andere bleibt er abnehmerneutral: er liefert aus, prueft aber nicht gegen
+#: fremde Erwartungen.
+SUPPORTED_FORMATS = ("karo-adaptiv-v1",)
+
 import hashlib
 import json
 import os
@@ -466,7 +478,7 @@ def export_response(row: dict, db=None) -> tuple[int, dict]:
                      "format": row.get("format_id"), "concept_id": row.get("concept_id"),
                      "concept_version": row.get("concept_version")}
     base = {"export_id": row["id"], "format": row["format_id"], "concept_id": row["concept_id"],
-            "concept_version": row["concept_version"]}
+            "concept_version": row["concept_version"], "contract_version": CONTRACT_VERSION}
     if row["status"] == "ready":
         if db is not None:
             concept = db.concept(row['concept_id'])
@@ -476,6 +488,13 @@ def export_response(row: dict, db=None) -> tuple[int, dict]:
                 return 200, {**base, 'status': 'unavailable', 'reason_code': 'classification_needs_review'}
             base['classification'] = dict(source='approved_curriculum',
                 first_contact_grade=concept['first_contact_grade'], target_grade=concept['target_grade'])
+            # Das Fach gehoert in die Antwort: der Abnehmer prueft damit, dass
+            # keine Lernreihe aus einem anderen Curriculum bei ihm landet.
+            # Solange das Feld fehlte, lief seine Pruefung ins Leere.
+            fach = db.one("SELECT name FROM curriculum.subjects WHERE code=%s",
+                          (concept['subject_code'],))
+            if fach:
+                base['subject'] = fach['name']
         return 200, {**base, "status": "ready", "lesson": row["lesson"]}
     if row["status"] in ("waiting", "queued", "running"):
         return 202, {**base, "status": "pending", "stage": row["status"], "retry_after": 15}
