@@ -5,3 +5,6 @@ __pycache__/
 data/
 export/
 *.egg-info/
+
+# Erzeugte Vorschauen und Berichte, keine Quellen.
+output/

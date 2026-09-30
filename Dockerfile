@@ -24,5 +24,15 @@ USER kcteam
 # Absturz spuelt den Puffer. Ein Agent, der minutenlang schweigt, ist im
 # Betrieb nicht nachvollziehbar.
 ENV PYTHONUNBUFFERED=1
+
+# Woraus dieses Image gebaut wurde. Ohne diese Angabe laesst sich nicht
+# feststellen, ob ein laufender Dienst einem Stand entspricht, den es im
+# Repository ueberhaupt gibt — genau daran ist ein Ende-zu-Ende-Lauf schon
+# einmal gescheitert: das Image trug Code aus einem schmutzigen
+# Arbeitsbaum. `make build` reicht den Wert ein und weigert sich, wenn
+# etwas nicht committet ist.
+ARG KCTEAM_GIT_SHA=unbekannt
+ENV KCTEAM_GIT_SHA=$KCTEAM_GIT_SHA
+LABEL org.opencontainers.image.revision=$KCTEAM_GIT_SHA
 ENTRYPOINT ["python", "-m", "kcteam"]
 CMD ["run"]
