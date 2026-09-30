@@ -26,5 +26,9 @@ if ! git branch -r --contains "$SHA" | grep -q .; then
 fi
 
 echo "Baue aus $SHA"
-docker compose build --build-arg "KCTEAM_GIT_SHA=$SHA" "$@"
+# Alle Profile: die Dienste liegen in Profilen ("agent", "admin", "cli"), und
+# ohne Profil baute `docker compose build` still gar nichts — es meldete
+# "No services to build" und gab 0 zurueck. Ein Build, der nichts baut und
+# trotzdem "Fertig" sagt, ist schlimmer als keiner.
+docker compose --profile "*" build --build-arg "KCTEAM_GIT_SHA=$SHA" "$@"
 echo "Fertig. Image-Stand: $SHA"
