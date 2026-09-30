@@ -44,9 +44,10 @@ def env():
     cfg = load_config()
     cfg.pipeline["parallel_concepts"] = 3
     db = DB(URL)
-    db.query("DROP SCHEMA IF EXISTS karo CASCADE; DROP SCHEMA IF EXISTS curriculum CASCADE; "
-             "DROP SCHEMA IF EXISTS learner CASCADE;")
-    db.migrate()
+    # Einziger erlaubter Weg zum Leeren: er prüft Umgebung, tatsächlichen
+    # Datenbanknamen, die Selbstauskunft der Datenbank und den Kill-Switch.
+    from tools.reset_test_db import reset_schemas
+    reset_schemas(db, mit_backup=False)
     prov = Counting(make_provider("mock", cfg))
     run_id = db.start_run("Mathematik", (1, 10), "mock")
     Pipeline(cfg=cfg, provider=prov, db=db, run_id=run_id, log=lambda *_: None).run("Mathematik", (1, 10))
@@ -71,6 +72,28 @@ def test_auth_required(env):
     assert api.post("/v1/resolve", json={"subject": "Mathematik", "grade": 6, "topic": "x"}).status_code == 401
     assert api.post("/v1/resolve", json={"subject": "Mathematik", "grade": 6, "topic": "x"},
                     headers=h("kc_falsch")).status_code == 401
+
+
+def test_first_grader_request_does_not_relabel_fractions(env):
+    api, key, db, agent = env['api'], env['key'], env['db'], env['agent']
+    cid = 'MA.BRUECHE.ADD_UNGL'
+    before = db.concept(cid)
+    spec = {**KARO, 'instructions': KARO.get('instructions', '') + '\nPrüfe die curriculare Klasse unabhängig.'}
+    response = api.post('/v1/lessons', json=lesson_body(grade=1, concept_id=cid, format=spec,
+                        topic='Ungleichnamige Brüche addieren'), headers=h(key))
+    eid = response.json()['export_id']
+    row = db.one('SELECT * FROM curriculum.lesson_exports WHERE id=%s', (eid,))
+    assert row['grade'] == before['first_contact_grade'] > 1
+    agent.serve(once=True)
+    result = api.get(f'/v1/lessons/{eid}', headers=h(key)).json()
+    assert result['status'] == 'ready', result
+    assert result['classification'] == dict(source='approved_curriculum',
+        first_contact_grade=before['first_contact_grade'], target_grade=before['target_grade'])
+    assert (result['lesson']['konzept']['klasse_von'], result['lesson']['konzept']['klasse_bis']) == (
+        before['first_contact_grade'], before['target_grade'])
+    after = db.concept(cid)
+    assert (after['first_contact_grade'], after['target_grade']) == (
+        before['first_contact_grade'], before['target_grade'])
 
 
 def test_resolve_found_is_fast(env):
@@ -116,7 +139,7 @@ def test_lesson_for_existing_concept_then_cached(env):
 
 def test_lesson_for_new_topic_waits_for_request(env):
     api, key, agent, db = env["api"], env["key"], env["agent"], env["db"]
-    r = api.post("/v1/lessons", json=lesson_body(grade=7, topic="Rabatte berechnen",
+    r = api.post("/v1/lessons", json=lesson_body(grade=1, topic="Rabatte berechnen",
                                                  tasks=["Name: Max Muster", "Ein Fahrrad kostet 200 €, 10 % Rabatt."]),
                  headers=h(key))
     assert r.status_code == 202 and r.json()["stage"] == "waiting" and r.json()["request_id"]
@@ -125,6 +148,9 @@ def test_lesson_for_new_topic_waits_for_request(env):
     row = db.one("SELECT * FROM curriculum.lesson_exports WHERE id=%s", (eid,))
     assert row["status"] == "ready", row
     assert row["concept_id"] and db.concept(row["concept_id"])["status"] == "approved"
+    concept = db.concept(row['concept_id'])
+    assert row['grade'] == concept['first_contact_grade'] > 1
+    assert row['lesson']['konzept']['klasse_bis'] == concept['target_grade']
     # der Kopierschutz/Datenschutz aus dem Auftrag gilt weiter: keine Namen in der Anfrage gespeichert
     req = db.one("SELECT tasks FROM curriculum.topic_requests WHERE id=%s", (r.json()["request_id"],))
     assert not any("Max Muster" in t for t in req["tasks"])

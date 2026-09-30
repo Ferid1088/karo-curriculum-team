@@ -53,9 +53,10 @@ def env():
     cfg = load_config()
     cfg.pipeline["parallel_concepts"] = 3
     db = DB(URL)
-    db.query("DROP SCHEMA IF EXISTS karo CASCADE; DROP SCHEMA IF EXISTS curriculum CASCADE; "
-             "DROP SCHEMA IF EXISTS learner CASCADE;")
-    db.migrate()
+    # Einziger erlaubter Weg zum Leeren: er prüft Umgebung, tatsächlichen
+    # Datenbanknamen, die Selbstauskunft der Datenbank und den Kill-Switch.
+    from tools.reset_test_db import reset_schemas
+    reset_schemas(db, mit_backup=False)
     run_id = db.start_run("Mathematik", (1, 10), "mock")
     Pipeline(cfg=cfg, provider=make_provider("mock", cfg), db=db, run_id=run_id,
              log=lambda *_: None).run("Mathematik", (1, 10))
@@ -239,3 +240,38 @@ def test_completion_resumes_after_crash_without_hiding_ready_concepts(env):
     assert st["status"] == "ready" and st["concepts"]       # Karo arbeitet weiter damit
     agent.serve(once=True)
     assert _status(db, rid)["status"] == "done"
+
+
+# ---------------- Rückstellung nach einem Fehlschlag ----------------
+def test_backoff_interval_is_an_integer_in_every_sql():
+    """`2 ^ attempts` ist in PostgreSQL eine Potenz und liefert double
+    precision; `make_interval(mins => ...)` verlangt integer.
+
+    Ohne Cast wirft die Anweisung `UndefinedFunction` — und zwar genau dort,
+    wo der Agent einen Fehlschlag wegstecken soll. Ein leeres Anbieter-
+    Kontingent wurde so zur Absturzschleife: Auftrag scheitert, Rückstellung
+    stürzt ab, Neustart, nächster Auftrag, von vorn.
+    """
+    import re
+    from pathlib import Path
+
+    from kcteam import ondemand
+
+    quelle = Path(ondemand.__file__).read_text(encoding="utf-8")
+    aufrufe = re.findall(r"make_interval\(mins => ([^)]*\)?[^)]*)\)", quelle)
+    berechnete = [a for a in aufrufe if "attempts" in a]
+    assert berechnete, "die Rückstellung rechnet ihre Wartezeit im SQL aus"
+    assert all("::int" in a for a in berechnete), berechnete
+
+
+@needs_db
+def test_postgres_rejects_a_fractional_interval_but_takes_the_cast():
+    """Der Beweis am echten Server: ohne Cast gibt es die Funktion nicht."""
+    with psycopg.connect(URL) as conn:
+        with conn.cursor() as cur:
+            with pytest.raises(psycopg.errors.UndefinedFunction):
+                cur.execute("SELECT now() + make_interval(mins => 2 ^ 3)")
+        conn.rollback()
+        with conn.cursor() as cur:
+            cur.execute("SELECT make_interval(mins => (2 ^ 3)::int)")
+            assert cur.fetchone()[0].total_seconds() == 8 * 60

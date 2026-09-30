@@ -209,8 +209,12 @@ class CurriculumAgent:
                                            reason_code="error", message=str(exc)[:500])
                 else:
                     self._requeue(req["id"], message=str(exc)[:500])
+                    # `2 ^ attempts` ist in PostgreSQL eine Potenz und liefert
+                    # double precision; make_interval(mins => ...) verlangt
+                    # integer. Ohne den Cast stirbt der Agent genau hier —
+                    # also bei jedem Fehlschlag, den er verkraften soll.
                     self.db.query("UPDATE curriculum.topic_requests SET next_attempt_at = now() + "
-                                  "make_interval(mins => 2 ^ attempts) WHERE id=%s", (req["id"],))
+                                  "make_interval(mins => (2 ^ attempts)::int) WHERE id=%s", (req["id"],))
             finally:
                 self.current = None
         return True
@@ -235,8 +239,9 @@ class CurriculumAgent:
                     lessons.finish_export(self.db, row["id"], "failed", reason_code="error", message=str(exc),
                                           only_from=("running",))
                 else:
+                    # Siehe oben: make_interval(mins => ...) braucht integer.
                     self.db.query("""UPDATE curriculum.lesson_exports SET status='queued', message=%s,
-                                       next_attempt_at=now() + make_interval(mins => 2 ^ attempts)
+                                       next_attempt_at=now() + make_interval(mins => (2 ^ attempts)::int)
                                      WHERE id=%s AND status='running'""", (str(exc)[:500], row["id"]))
             finally:
                 self.current_export = None

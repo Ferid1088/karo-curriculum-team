@@ -76,9 +76,10 @@ def env():
     os.environ["KARO_SPEC_PATH"] = "/nonexistent"
     cfg = load_config()
     db = DB(URL)
-    db.query("DROP SCHEMA IF EXISTS karo CASCADE; DROP SCHEMA IF EXISTS curriculum CASCADE; "
-             "DROP SCHEMA IF EXISTS learner CASCADE;")
-    db.migrate()
+    # Einziger erlaubter Weg zum Leeren: er prüft Umgebung, tatsächlichen
+    # Datenbanknamen, die Selbstauskunft der Datenbank und den Kill-Switch.
+    from tools.reset_test_db import reset_schemas
+    reset_schemas(db, mit_backup=False)
 
     def run(subject, grades):
         run_id = db.start_run(subject, grades, "mock")

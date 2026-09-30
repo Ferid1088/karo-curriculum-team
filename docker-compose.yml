@@ -10,6 +10,16 @@
 #         docker compose run --rm kcteam api-client add --name karo      (Schlüssel für Karo, einmalig)
 # Datenbank-Browser (nur lesen, http://127.0.0.1:8090, braucht ADMIN_PASSWORD in .env):
 #         docker compose --profile admin up -d
+#
+# Stoppen:
+#   docker compose down        <- normal. Container weg, Daten bleiben.
+#   docker compose down -v     <- GEFAEHRLICH: loescht auch die Volumes und damit
+#                                 die Entwicklungsdatenbank. Gehoert in keinen
+#                                 normalen Arbeitsablauf. Siehe README.
+#
+# Tests:  docker compose --profile test up -d postgres-test
+#         TEST_DATABASE_URL=postgresql://karo:karo@127.0.0.1:5434/karo_curriculum_test \
+#           APP_ENV=test ALLOW_DESTRUCTIVE_DB_RESET=YES python -m tools.reset_test_db --create
 
 services:
   postgres:
@@ -27,6 +37,26 @@ services:
       test: ["CMD-SHELL", "pg_isready -U karo"]
       interval: 3s
       retries: 20
+
+  # Datenbank NUR fuer Tests. Eigener Container, eigenes Volume, eigener Port,
+  # eigener Datenbankname auf "_test" — damit ein Testlauf die Entwicklungs-
+  # datenbank technisch nicht erreichen kann, selbst bei falsch gesetzter
+  # Variable. Start:  docker compose --profile test up -d postgres-test
+  postgres-test:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: karo
+      POSTGRES_PASSWORD: karo
+      POSTGRES_DB: karo_curriculum_test
+    volumes:
+      - pgdata_test:/var/lib/postgresql/data
+    ports:
+      - "127.0.0.1:${POSTGRES_TEST_HOST_PORT:-5434}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U karo -d karo_curriculum_test"]
+      interval: 3s
+      retries: 20
+    profiles: ["test"]
 
   kcteam:
     build: .
@@ -102,7 +132,10 @@ networks:
     name: karo-net
 
 volumes:
+  # Entwicklungsdaten. Wird NIE von Tests benutzt.
   pgdata:
+  # Testdaten, strikt getrennt. Nur dieses Volume darf ein Reset treffen.
+  pgdata_test:
   # Karos Volume (Spec lesen). Gibt es das Volume schon (Karo läuft), wird es mitbenutzt, sonst neu angelegt.
   karo_data:
     name: ${KARO_VOLUME:-karo_karo-data}

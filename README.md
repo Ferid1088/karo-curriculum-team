@@ -393,6 +393,55 @@ kcteam bench -n 500 -c 10           # Latenz messen
 
 ---
 
+## Tests und Datenbank-Sicherheit
+
+Tests laufen **niemals** gegen die Entwicklungsdatenbank. Sie haben einen eigenen
+Container, ein eigenes Volume, einen eigenen Port und einen eigenen Datenbanknamen:
+
+```bash
+docker compose --profile test up -d postgres-test        # Port 5434, Volume pgdata_test
+
+export TEST_DATABASE_URL=postgresql://karo:karo@127.0.0.1:5434/karo_curriculum_test
+export APP_ENV=test
+export ALLOW_DESTRUCTIVE_DB_RESET=YES
+
+python -m tools.reset_test_db --create                   # einmalig: anlegen und stempeln
+pytest                                                   # ab jetzt normal
+```
+
+Zeigt `TEST_DATABASE_URL` auf etwas anderes, bricht pytest **vor dem ersten Test**
+ab. Keine Warnung, kein Überspringen — Abbruch mit Exit-Code 4.
+
+### Der einzige Weg, eine Datenbank zu leeren
+
+```bash
+python -m tools.reset_test_db          # mit pg_dump nach backups/
+python -m tools.reset_test_db --no-backup
+```
+
+Erlaubt nur, wenn **alle vier** Bedingungen gleichzeitig zutreffen:
+
+| Prüfung | woher |
+|---|---|
+| `APP_ENV=test` | Umgebung |
+| Name endet auf `_test` | `SELECT current_database()`, nicht aus der URL |
+| `system_identity.environment = 'test'` | die Datenbank selbst |
+| `ALLOW_DESTRUCTIVE_DB_RESET=YES` | bewusster Schalter |
+
+Fehlt eine: Abbruch. `DROP SCHEMA` steht im ganzen Projekt nur noch an einer
+einzigen Stelle — in `tools/reset_test_db.py`, hinter diesen Prüfungen. Ein Test
+prüft das (`tests/test_dbsafety.py`).
+
+### Docker: harmlos und gefährlich
+
+```bash
+docker compose down        # normal — Container weg, Daten bleiben
+docker compose down -v     # GEFÄHRLICH — löscht die Volumes und damit die Datenbank
+```
+
+`down -v` gehört in keinen normalen Arbeitsablauf. Wer eine frische Testdatenbank
+will, nimmt `python -m tools.reset_test_db`.
+
 ## Datenbank-Browser (nur lesen)
 
 Eine kleine Oberfläche für **beide** Datenbanken: das Curriculum (Postgres) und Karos Katalog (SQLite).

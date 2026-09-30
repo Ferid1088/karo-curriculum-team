@@ -58,8 +58,10 @@ def env():
     cfg = load_config()
     cfg.pipeline["parallel_concepts"] = 3
     db = DB(URL)
-    db.query("DROP SCHEMA IF EXISTS karo CASCADE; DROP SCHEMA IF EXISTS curriculum CASCADE; DROP SCHEMA IF EXISTS learner CASCADE;")
-    db.migrate()
+    # Einziger erlaubter Weg zum Leeren: er prüft Umgebung, tatsächlichen
+    # Datenbanknamen, die Selbstauskunft der Datenbank und den Kill-Switch.
+    from tools.reset_test_db import reset_schemas
+    reset_schemas(db, mit_backup=False)
     return cfg, db
 
 
