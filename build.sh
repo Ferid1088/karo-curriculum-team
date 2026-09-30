@@ -15,6 +15,16 @@ if [ -n "$(git status --porcelain)" ]; then
 fi
 
 SHA=$(git rev-parse HEAD)
+
+# Und nur aus einem Stand, den es auch anderswo gibt. Ein Image aus einem
+# Commit, der nur auf diesem Rechner liegt, laesst sich nicht nachvollziehen:
+# die Zeile im Image zeigt auf nichts.
+if ! git branch -r --contains "$SHA" | grep -q .; then
+  echo "ABBRUCH: $SHA ist auf keinem Remote." >&2
+  echo "Erst pushen, dann bauen — sonst zeigt die SHA im Image ins Leere." >&2
+  exit 3
+fi
+
 echo "Baue aus $SHA"
 docker compose build --build-arg "KCTEAM_GIT_SHA=$SHA" "$@"
 echo "Fertig. Image-Stand: $SHA"

@@ -616,3 +616,27 @@ def test_no_new_job_when_the_daily_quota_is_spent(env, monkeypatch):
     assert agent.process_next() is False
     monkeypatch.setattr(agent, "daily_calls", 0)          # 0 = keine Grenze
     assert agent.kontingent()["left"] is None and agent.kontingent_reicht()
+
+
+def test_the_same_topic_from_two_families_stays_one_job(env):
+    """Zwei Familien, dasselbe Thema, ein Auftrag – und ein Modellaufruf.
+
+    Siebzehn Prüfungsthemen mal drei Familien waeren einundfuenfzig Auftraege
+    fuer siebzehn Lektionen. Das Kontingent haelt das nicht aus, und noetig
+    ist es auch nicht: die Lektion ist dieselbe.
+    """
+    api, key, other, db, prov = env["api"], env["key"], env["other"], env["db"], env["prov"]
+    thema = "Senkrechte und parallele Geraden"
+    erste = api.post("/v1/resolve", json={"subject": "Mathematik", "grade": 6, "topic": thema,
+                                          "needed_by": "2027-11-30"}, headers=h(key)).json()
+    assert erste["status"] == "ordered", erste
+    vorher = prov.calls
+    zweite = api.post("/v1/resolve", json={"subject": "Mathematik", "grade": 6, "topic": thema,
+                                           "needed_by": "2027-10-10"}, headers=h(other)).json()
+    assert zweite["request_id"] == erste["request_id"] and zweite.get("joined") is True
+    assert prov.calls == vorher, "Das Zusammenlegen darf keinen Modellaufruf kosten"
+    auftrag = db.one("""SELECT requested_count, needed_by FROM curriculum.topic_requests
+                        WHERE id=%s""", (erste["request_id"],))
+    assert auftrag["requested_count"] == 2
+    # Die Familie mit der frueheren Arbeit zieht den gemeinsamen Auftrag vor.
+    assert auftrag["needed_by"].isoformat() == "2027-10-10"
