@@ -92,3 +92,35 @@ def test_kaputte_bereitschaftspruefung_gilt_als_nicht_pruefbar(monkeypatch):
                         consumers.Abnehmer(befunde=lambda l, u: [], einordnung=lambda l, u: [],
                                            bereit=explodiert))
     assert "kaputt" in consumers.nicht_pruefbar({"id": "karo-adaptiv-v1"})
+
+
+def test_der_dienst_startet_nicht_ohne_die_pruefung(monkeypatch, capsys):
+    """Ein Dienst, der Karo nichts liefern kann, soll gar nicht erst hochkommen.
+
+    Sonst laeuft er stundenlang und liefert nichts — sichtbar erst, wenn eine
+    Familie wartet.
+    """
+    from kcteam import cli
+    assert consumers.startsperre() == []
+    monkeypatch.setitem(consumers._REGISTER, "karo-adaptiv-v1",
+                        consumers.Abnehmer(befunde=lambda l, u: [], einordnung=lambda l, u: [],
+                                           bereit=lambda: "karo_contract fehlt"))
+    assert consumers.startsperre() == ["karo-adaptiv-v1: karo_contract fehlt"]
+    assert cli._abnehmer_pruefbar() == 1
+    ausgabe = capsys.readouterr().out
+    assert "karo_contract fehlt" in ausgabe and "startet nicht" in ausgabe
+
+
+def test_das_paket_kommt_aus_einem_tag_nicht_aus_master():
+    """Sonst zieht irgendein Commit in Karo still die Pruefung dieses Dienstes mit."""
+    from pathlib import Path
+
+    from kcteam.lessons import CONTRACT_VERSION
+    tag = "contract-v" + CONTRACT_VERSION.removeprefix("karo-adaptiv-v")
+    wurzel = Path(__file__).resolve().parent.parent
+    for name in ("requirements.txt", "pyproject.toml"):
+        text = (wurzel / name).read_text(encoding="utf-8")
+        zeilen = [z for z in text.splitlines() if "karo-contract" in z and "git+" in z]
+        assert zeilen, f"karo-contract fehlt in {name}"
+        for z in zeilen:
+            assert z.rstrip('",').endswith("@" + tag), f"{name}: {z.strip()} zeigt nicht auf {tag}"

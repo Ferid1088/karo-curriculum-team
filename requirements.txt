@@ -12,6 +12,10 @@ pytest>=8.0
 
 # Karos eigene Lektionspruefung. Der Dienst ruft sie, bevor eine Lektion
 # „fertig" wird — sonst prueft er mit einem Nachbau, der anders ist als das
-# Original, gibt frei, und der Abnehmer lehnt ab. Fehlt das Paket, laeuft der
-# Dienst weiter und sagt es beim Start (kcteam/consumers.py).
-karo-contract @ git+https://github.com/Ferid1088/karo.git
+# Original, gibt frei, und der Abnehmer lehnt ab.
+#
+# Festgenagelt auf ein Tag, nie auf master: sonst zieht irgendein Commit in
+# Karo still die Pruefung dieses Dienstes mit, und niemand hat das
+# entschieden. Vertrag aendern siehe README, Abschnitt „Vertrag aendern".
+# Fehlt das Paket oder passt die Fassung nicht, startet der Dienst nicht.
+karo-contract @ git+https://github.com/Ferid1088/karo.git@contract-v1.1

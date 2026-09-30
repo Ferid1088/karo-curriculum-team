@@ -530,3 +530,38 @@ Achtung: Die Tests löschen die Schemas `curriculum`, `karo` und `learner` in di
 - Bei einem Rate-Limit pausieren alle Worker gemeinsam; Strg+C beendet auch laufende Wartezeiten sofort.
 - Die fachliche und rechtliche Qualität hängt vom Modell ab. Eine pädagogische Fachkraft sollte Stichproben prüfen (`curriculum.reviews` enthält jede Entscheidung).
 - Der Inspektor prüft **Inhalte**. Die rechtliche Prüfung der App selbst (Einwilligung der Eltern, DSGVO, Umgang mit hochgeladenen Arbeitsblättern) ersetzt er nicht.
+
+## Vertrag ändern
+
+Karo und dieser Dienst teilen sich ein Lektionsformat. Es liegt als Paket
+`karo_contract` in Karos Repository, und dieser Dienst installiert daraus ein
+**Tag**, nie `master` — sonst zieht irgendein Commit in Karo still die Prüfung
+dieses Dienstes mit, und niemand hat das entschieden.
+
+Der Anlass: der Dienst prüfte mit einem Nachbau von Karos Regeln, gab eine
+Lektion frei, Karos Import lehnte sie ab, und nach zwei Ablehnungen gab der
+Dienst das Thema dauerhaft nicht mehr heraus — obwohl am Inhalt nie etwas
+falsch war.
+
+Reihenfolge, wenn sich am Format etwas ändert:
+
+1. **Im Karo-Repo** `karo_contract.CONTRACT_VERSION` erhöhen (z. B. auf
+   `karo-adaptiv-v1.2`), committen, pushen.
+2. **Taggen**: `git tag -a contract-v1.2 -m "…" && git push origin contract-v1.2`.
+3. **Hier** die neue Fassung eintragen: `CONTRACT_VERSION` in `kcteam/lessons.py`,
+   und das Tag in `requirements.txt` und `pyproject.toml`.
+4. **Beide CIs grün.** Der Vertragstest (`tests/test_karo_bridge_contract.py`)
+   fährt echtes Karo gegen diesen Dienst; er läuft in beiden Repos und darf
+   nicht übersprungen werden.
+5. **Diesen Dienst zuerst ausrollen**: `./build.sh && docker compose --profile agent
+   --profile admin up -d`, danach `kcteam doctor`.
+6. **Erst dann Karo deployen.**
+
+Diese Reihenfolge ist nicht beliebig: läuft Karo voraus, meldet es nur eine
+andere Vertragsfassung und stellt seine Aufträge zurück — ärgerlich, aber
+harmlos. Läuft der Dienst voraus, ist es genauso. Was nicht passieren darf, ist
+ein Dienst ohne passendes Paket: dann liefert er für Karo gar nichts mehr
+(`consumer_check_missing`), und `kcteam api` / `kcteam serve` starten erst gar
+nicht.
+
+    kcteam doctor     # laufen alle Dienste auf demselben Stand, und ist das Paket da?

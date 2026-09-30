@@ -148,6 +148,16 @@ def _karo_einordnung(lesson: Any, umschlag: dict) -> list[str]:
 register("karo-adaptiv-v1", Abnehmer(befunde=_karo_befunde, einordnung=_karo_einordnung,
                                      bereit=_karo_bereit))
 
-_grund = nicht_pruefbar({"id": "karo-adaptiv-v1"})
-if _grund:                                          # pragma: no cover
-    log.warning("Fuer karo-adaptiv-v1 wird nichts ausgeliefert: %s", _grund)
+def startsperre() -> list[str]:
+    """Gruende, aus denen dieser Prozess nicht starten sollte.
+
+    Ein Dienst, der eingetragene Abnehmer nicht pruefen kann, laeuft sonst
+    stundenlang und liefert ihnen nichts — sichtbar erst, wenn eine Familie
+    wartet. Lieber gar nicht erst hochkommen und den Grund hinschreiben.
+    """
+    gruende = []
+    for format_id in registriert():
+        grund = nicht_pruefbar({"id": format_id})
+        if grund:
+            gruende.append(f"{format_id}: {grund}")
+    return gruende

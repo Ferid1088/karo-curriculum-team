@@ -15,7 +15,7 @@ dependencies = [
     "jsonschema>=4.21",
     "httpx>=0.27",
     # Die echte Pruefung des Abnehmers Karo, statt eines Nachbaus davon.
-    "karo-contract @ git+https://github.com/Ferid1088/karo.git",
+    "karo-contract @ git+https://github.com/Ferid1088/karo.git@contract-v1.1",
 ]
 
 [project.optional-dependencies]

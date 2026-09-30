@@ -231,6 +231,24 @@ def cmd_status(cfg, args) -> int:
     return 0
 
 
+def _abnehmer_pruefbar() -> int:
+    """0, wenn jeder eingetragene Abnehmer geprueft werden kann; sonst 1.
+
+    Startsperre fuer API und Agent: ein Dienst, der Karos Pruefung nicht laden
+    kann, liefert Karo nichts — und das faellt erst auf, wenn eine Familie
+    wartet. Der Browser (`admin`) startet trotzdem: mit ihm sieht man nach,
+    was los ist.
+    """
+    from . import consumers
+    gruende = consumers.startsperre()
+    for g in gruende:
+        print(f"✗ {g}")
+    if gruende:
+        print("\nDer Dienst startet nicht, weil er fuer diese Abnehmer nichts ausliefern koennte.")
+        print("Siehe README, Abschnitt „Vertrag ändern“.")
+    return 1 if gruende else 0
+
+
 def cmd_doctor(cfg, args) -> int:
     """Laufen alle Dienste, und alle aus demselben Bild?
 
@@ -242,7 +260,12 @@ def cmd_doctor(cfg, args) -> int:
     db = DB(cfg.database_url)
     db.migrate()
     print(version.startmeldung("cli"))
+    from . import consumers
+    gesperrt = consumers.startsperre()
+    for g in gesperrt:
+        print(f"  ✗ {g}")
     ok, zeilen = version.befund(db, tuple(args.dienst) if args.dienst else ("api", "agent", "admin"))
+    ok = ok and not gesperrt
     for z in zeilen:
         print("  " + z)
     if not ok:
@@ -459,6 +482,8 @@ def cmd_serve(cfg, args) -> int:
         print("\n⏸ Curriculum-Agent wird beendet (laufender Auftrag wird später fortgesetzt) …")
         agent.shutdown()
     signal.signal(signal.SIGTERM, stop)
+    if _abnehmer_pruefbar():
+        return 1
     print(version.startmeldung("agent"))
     version.puls(lambda: db, "agent")
     print(f"▶ Curriculum-Agent läuft (Provider {provider_name}). Wartet auf Aufträge von Karo …")
@@ -542,6 +567,8 @@ def cmd_api(cfg, args) -> int:
     db = DB(cfg.database_url)
     db.migrate()
     db.close_all()
+    if _abnehmer_pruefbar():
+        return 1
     print(version.startmeldung("api"))
     print(f"▶ Curriculum-Service auf http://{args.host}:{args.port}  (Doku: /docs)")
     uvicorn.run("kcteam.api:create_app", factory=True, host=args.host, port=args.port, workers=args.workers,
