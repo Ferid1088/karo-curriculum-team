@@ -3,9 +3,9 @@
 Sicherheit:
 - Startet nicht ohne ADMIN_PASSWORD; HTTP Basic Auth (Benutzer ADMIN_USER, Standard „admin“).
 - Postgres-Sitzungen sind READ ONLY (jede Transaktion), dazu ein Zeitlimit pro Abfrage.
-- Einzige Ausnahme: „Wieder freigeben“ an einer Lektion. Das ist eine fest
-  verdrahtete Anweisung ohne Eingabe aus der URL und benutzt eine eigene,
-  schreibende Verbindung – nirgendwo sonst wird geschrieben.
+- Zwei Ausnahmen, beide ohne Eingabe aus der URL und ueber eine eigene,
+  schreibende Verbindung: „Wieder freigeben“ an einer Lektion, und das eigene
+  Lebenszeichen (welcher Stand hier laeuft, fuer `kcteam doctor`).
 - Karos SQLite-Datei wird mit mode=ro geöffnet (Volume zusätzlich :ro gemountet).
 - Spalten mit Geheimnissen (password, secret, token, key_hash …) werden nie angezeigt.
 - Tabellen- und Spaltennamen kommen nur aus dem Katalog der Datenbank, nie aus der URL in SQL.
@@ -30,7 +30,7 @@ from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.templating import Jinja2Templates
 from psycopg import sql as pgsql
 
-from .. import lessons
+from .. import lessons, version
 from ..db import DB
 
 HIDDEN = re.compile(r"pass(word)?|secret|token|key_hash|api_?key|credential", re.IGNORECASE)
@@ -129,6 +129,10 @@ def create_app(db: DB | None = None, karo_db: str | None = None,
         con = sqlite3.connect(f"file:{karo_path}?mode=ro", uri=True, timeout=2)
         con.row_factory = sqlite3.Row
         return con
+
+    # Lebenszeichen mit Stand: sonst laeuft der Browser unbemerkt aus einem
+    # aelteren Image weiter als API und Agent (`kcteam doctor`).
+    version.puls(pg_write, "admin")
 
     def render(request: Request, name: str, **ctx) -> HTMLResponse:
         return TEMPLATES.TemplateResponse(request, name, {"karo_path": karo_path, **ctx})

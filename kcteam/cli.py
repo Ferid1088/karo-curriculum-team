@@ -5,6 +5,7 @@
   python -m kcteam status [--subject Mathematik]
   python -m kcteam review list | show ID | approve ID | reject ID | retry ID  [--note "..."]
   python -m kcteam review unblock-export MA.BRUECHE 5 karo-adaptiv-v1   Thema wieder freigeben
+  python -m kcteam doctor                     laufen alle Dienste auf demselben Stand?
   python -m kcteam export --subject Mathematik
   python -m kcteam preview -b MA.BRUECHE   HTML-Vorschau der Visuals
   python -m kcteam catalog             HTML-Galerie aller Visual-Typen
@@ -30,7 +31,7 @@ from pathlib import Path
 
 import psycopg
 
-from . import lessons, review
+from . import lessons, review, version
 from .agents import BudgetExhausted, RateLimited
 from .config import load_config, load_karo_spec
 from .db import DB
@@ -227,6 +228,29 @@ def cmd_status(cfg, args) -> int:
         print(f"\nLetzter Lauf: {last['started_at']:%Y-%m-%d %H:%M} {last['status']} {json.dumps(last['stats'], ensure_ascii=False)}")
     n = len(review.list_open(db))
     print(f"Offene menschliche Prüfungen: {n}")
+    return 0
+
+
+def cmd_doctor(cfg, args) -> int:
+    """Laufen alle Dienste, und alle aus demselben Bild?
+
+    Der Anlass: die API lief auf dem neuen Image, Agent und Browser noch auf
+    dem alten. Von aussen war das nicht zu sehen — die API meldete ihren Stand,
+    die anderen gar nichts. Hinterher liess sich nicht sagen, welcher Code eine
+    Lektion geschrieben hatte. Dieser Befehl bricht ab, statt es hinzunehmen.
+    """
+    db = DB(cfg.database_url)
+    db.migrate()
+    print(version.startmeldung("cli"))
+    ok, zeilen = version.befund(db, tuple(args.dienst) if args.dienst else ("api", "agent", "admin"))
+    for z in zeilen:
+        print("  " + z)
+    if not ok:
+        print("\n✗ Die Dienste laufen nicht auf demselben Stand.")
+        print("  Neu bauen und hochfahren:  ./build.sh && docker compose "
+              '--profile agent --profile admin up -d')
+        return 1
+    print("\n✓ Alle Dienste laufen auf demselben Stand.")
     return 0
 
 
@@ -435,6 +459,8 @@ def cmd_serve(cfg, args) -> int:
         print("\n⏸ Curriculum-Agent wird beendet (laufender Auftrag wird später fortgesetzt) …")
         agent.shutdown()
     signal.signal(signal.SIGTERM, stop)
+    print(version.startmeldung("agent"))
+    version.puls(lambda: db, "agent")
     print(f"▶ Curriculum-Agent läuft (Provider {provider_name}). Wartet auf Aufträge von Karo …")
     try:
         agent.serve(once=args.once)
@@ -516,6 +542,7 @@ def cmd_api(cfg, args) -> int:
     db = DB(cfg.database_url)
     db.migrate()
     db.close_all()
+    print(version.startmeldung("api"))
     print(f"▶ Curriculum-Service auf http://{args.host}:{args.port}  (Doku: /docs)")
     uvicorn.run("kcteam.api:create_app", factory=True, host=args.host, port=args.port, workers=args.workers,
                 log_level="warning", access_log=False, proxy_headers=False)
@@ -549,6 +576,7 @@ def cmd_admin(cfg, args) -> int:
     if not os.environ.get("ADMIN_PASSWORD"):
         print("✗ ADMIN_PASSWORD ist nicht gesetzt – die Oberfläche startet nicht ohne Passwort.")
         return 1
+    print(version.startmeldung("admin"))
     print(f"▶ Datenbank-Browser auf http://{args.host}:{args.port}  (Benutzer: admin)")
     uvicorn.run("kcteam.admin:create_app", factory=True, host=args.host, port=args.port, log_level="warning")
     return 0
@@ -606,6 +634,10 @@ def main(argv: list[str] | None = None) -> int:
 
     p = sub.add_parser("status", help="Stand der Datenbank")
     p.add_argument("--subject", "-s")
+
+    p = sub.add_parser("doctor", help="laufen alle Dienste auf demselben Stand?")
+    p.add_argument("--dienst", "-d", action="append",
+                   help="nur diese Dienste prüfen (mehrfach angebbar)")
 
     p = sub.add_parser("review", help="menschliche Prüfung")
     p.add_argument("action", choices=["list", "show", "approve", "reject", "retry", "unblock-export"])
@@ -688,6 +720,7 @@ def main(argv: list[str] | None = None) -> int:
     if cmd == "run" and not hasattr(args, "subject"):
         args = parser.parse_args(["run"])
     handlers = {"run": cmd_run, "status": cmd_status, "review": cmd_review, "export": cmd_export,
+                "doctor": cmd_doctor,
                 "providers": cmd_providers, "init-db": cmd_init_db, "preview": cmd_preview,
                 "catalog": cmd_catalog, "subjects": cmd_subjects, "check": cmd_check, "simulate": cmd_simulate,
                 "serve": cmd_serve, "request": cmd_request, "export-sqlite": cmd_export_sqlite, "requests": cmd_requests, "demand": cmd_demand,

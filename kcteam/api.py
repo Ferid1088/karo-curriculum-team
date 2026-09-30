@@ -32,7 +32,7 @@ from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel, Field
 from psycopg.types.json import Jsonb
 
-from . import lessons
+from . import lessons, version
 from .db import DB
 
 KEY_PREFIX = "kc_"
@@ -309,6 +309,10 @@ def create_app(db: DB | None = None, webhooks: bool = False) -> FastAPI:
             raise HTTPException(404, "Lektion nicht gefunden")
         return row
 
+    # Lebenszeichen mit Stand: sonst laesst sich von aussen nicht sagen, ob
+    # API, Agent und Browser aus demselben Image laufen (`kcteam doctor`).
+    version.puls(get_db, "api")
+
     @app.get("/v1/meta")
     def meta():
         """Wer bin ich und nach welchem Vertrag rede ich?
@@ -322,9 +326,8 @@ def create_app(db: DB | None = None, webhooks: bool = False) -> FastAPI:
         ein Abnehmer muss die Fassungen vergleichen koennen, bevor er sich
         anmeldet.
         """
-        import os
         return {"contract_version": lessons.CONTRACT_VERSION,
-                "git_sha": os.environ.get("KCTEAM_GIT_SHA", "unbekannt"),
+                "git_sha": version.GIT_SHA,
                 "formats": list(lessons.SUPPORTED_FORMATS)}
 
     @app.get("/v1/lessons/{eid}")
