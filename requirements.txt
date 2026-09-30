@@ -9,3 +9,9 @@ jinja2>=3.1
 jsonschema>=4.21
 httpx>=0.27
 pytest>=8.0
+
+# Karos eigene Lektionspruefung. Der Dienst ruft sie, bevor eine Lektion
+# „fertig" wird — sonst prueft er mit einem Nachbau, der anders ist als das
+# Original, gibt frei, und der Abnehmer lehnt ab. Fehlt das Paket, laeuft der
+# Dienst weiter und sagt es beim Start (kcteam/consumers.py).
+karo-contract @ git+https://github.com/Ferid1088/karo.git

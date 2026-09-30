@@ -32,6 +32,7 @@ import referencing
 import referencing.exceptions
 from psycopg.types.json import Jsonb
 
+from . import consumers
 from .agents import compact
 
 #: Markup, Skript oder Style – nichts davon darf je in einer Lektion stehen (Abnehmer wie Karo verbieten es).
@@ -227,15 +228,43 @@ def content_grade(concept: dict, requested: int) -> int:
     return min(hi, max(lo, requested))
 
 
-def classification_errors(lesson: Any, concept: dict, spec: dict) -> list[str]:
-    # Other clients may not have level fields; Karo must carry canonical values.
-    if spec['id'] != 'karo-adaptiv-v1':
-        return []
-    metadata = lesson.get('konzept', {}) if isinstance(lesson, dict) else {}
-    if (metadata.get('klasse_von'), metadata.get('klasse_bis')) != (
-            concept['first_contact_grade'], concept['target_grade']):
-        return ['Klassenbereich muss exakt first_contact_grade/target_grade des freigegebenen Konzepts entsprechen.']
-    return []
+def umschlag(concept: dict, spec: dict, *, version: int | None = None,
+             topic: str | None = None, subject: str | None = None) -> dict:
+    """Die Antwort, wie der Abnehmer sie bekommen wird – ohne die Lektion.
+
+    Seine Pruefung sieht nicht nur den Text, sondern auch Fach, Format und
+    Klasseneinordnung. Genau daran ist im Betrieb alles gescheitert, also
+    wird auch genau das hier geprueft und nicht eine verkuerzte Fassung.
+    """
+    return {"format": spec.get("id"), "concept_id": concept.get("id"),
+            "concept_version": version if version is not None else concept.get("version"),
+            "classification": {"source": "approved_curriculum",
+                               "first_contact_grade": concept["first_contact_grade"],
+                               "target_grade": concept["target_grade"]},
+            "subject": subject, "topic": topic}
+
+
+def classification_errors(lesson: Any, concept: dict, spec: dict, *,
+                          version: int | None = None) -> list[str]:
+    """Beim Ausliefern: stimmt die Klasseneinordnung noch?
+
+    Frueher stand hier ein Nachbau von Karos Regel. Jetzt kommt sie aus
+    Karos eigenem Paket (`kcteam.consumers`). Formate ohne eingetragene
+    Pruefung bleiben unberuehrt — der Dienst ist fuer alle Abnehmer da.
+    """
+    return consumers.einordnung(lesson, umschlag(concept, spec, version=version), spec)
+
+
+def consumer_findings(lesson: Any, concept: dict, spec: dict, *, version: int | None = None,
+                      topic: str | None = None, subject: str | None = None) -> list[str]:
+    """Beim Schreiben: die ganze Lieferung, so wie der Abnehmer sie pruefen wird.
+
+    Was hier auffaellt, geht als Befund an den Lektionsautor. Vorher fiel es
+    erst beim Abnehmer auf — als Ablehnung, die gegen das Thema zaehlte und
+    es nach zweimal dauerhaft unlieferbar machte.
+    """
+    return consumers.befunde(lesson, umschlag(concept, spec, version=version, topic=topic,
+                                              subject=subject), spec)
 
 
 def request_export(db, *, client_id: int | None, spec: dict, grade: int, concept_id: str | None = None,
@@ -497,8 +526,20 @@ def generate(pipe, db, row: dict) -> tuple[str, Any, str | None]:
                    + row["message"].replace("<<<", "").replace(">>>", "") + "\n>>>")
     eid = f"EXP-{row['id']}"
 
+    fach = db.one("SELECT name FROM curriculum.subjects WHERE code=%s", (c["subject_code"],))
+
     def validate(obj):
-        errs = check_lesson(obj, spec) + classification_errors(obj, c, spec)
+        # Die Pruefung des Abnehmers laeuft hier, nicht erst bei ihm: was sie
+        # findet, geht als Befund zurueck an den Autor und wird neu
+        # geschrieben. Vorher fiel es erst beim Abnehmer auf – als Ablehnung,
+        # die gegen das Thema zaehlte.
+        errs = check_lesson(obj, spec) + consumer_findings(
+            obj, c, spec, version=row["concept_version"],
+            # Nur wenn der Dienst das Konzept selbst aus dem Thema gesucht hat.
+            # Hat der Abnehmer es benannt, ist die Zuordnung seine Entscheidung
+            # und der Dienst hat ihr nicht zu widersprechen.
+            topic=row["topic"] if row.get("request_id") else None,
+            subject=fach["name"] if fach else None)
         if errs:
             raise ValueError("Die Lektion passt nicht zum Format:\n- " + "\n- ".join(errs))
         return obj
@@ -530,9 +571,15 @@ def export_response(row: dict, db=None) -> tuple[int, dict]:
     if row["status"] == "ready":
         if db is not None:
             concept = db.concept(row['concept_id'])
+            # Beim Ausliefern nur noch, was sich seit der Freigabe geaendert
+            # haben kann. Die Themenzuordnung gehoert nicht hierher: sie ist
+            # ein unscharfer Stichwortabgleich, und eine freigegebene Lektion
+            # kurz vor der Auslieferung daran scheitern zu lassen hiesse,
+            # einer Familie ohne Grund nichts zu geben.
             if (not concept or concept['status'] != 'approved'
                     or concept['version'] != row['concept_version']
-                    or classification_errors(row['lesson'], concept, {'id': row['format_id']})):
+                    or classification_errors(row['lesson'], concept, {'id': row['format_id']},
+                                             version=row['concept_version'])):
                 return 200, {**base, 'status': 'unavailable', 'reason_code': 'classification_needs_review'}
             base['classification'] = dict(source='approved_curriculum',
                 first_contact_grade=concept['first_contact_grade'], target_grade=concept['target_grade'])
@@ -556,7 +603,11 @@ def admin_approve_export(db, eid: int, raw: Any) -> str:
     concept = db.concept(row['concept_id']) if row else None
     if not concept or concept['status'] != 'approved' or concept['version'] != row['concept_version']:
         raise ValueError('Das Konzept ist nicht in dieser Version freigegeben')
-    errors = check_lesson(raw, row['format_spec']) + classification_errors(raw, concept, row['format_spec'])
+    fach = db.one("SELECT name FROM curriculum.subjects WHERE code=%s", (concept['subject_code'],))
+    errors = check_lesson(raw, row['format_spec']) + consumer_findings(
+        raw, concept, row['format_spec'], version=row['concept_version'],
+        topic=row['topic'] if row.get('request_id') else None,
+        subject=fach['name'] if fach else None)
     if errors:
         raise ValueError('; '.join(errors))
     finish_export(db, eid, "ready", raw, message="vom Menschen freigegeben")

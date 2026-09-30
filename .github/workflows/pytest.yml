@@ -52,6 +52,9 @@ jobs:
           python -m pip install --upgrade pip
           pip install -e ".[dev]"
           pip install -r karo-app/requirements.txt
+          # karo-contract aus dem Checkout daneben, nicht aus master: geprueft
+          # wird der Stand, gegen den dieser Lauf faehrt.
+          pip install -e ./karo-app
 
       - name: Testdatenbank stempeln
         run: python -m tools.reset_test_db --create --no-backup

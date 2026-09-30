@@ -2,7 +2,8 @@ FROM python:3.12-slim
 
 # Node + claude CLI werden für den Provider "claude_token" (Claude-Abo) gebraucht.
 ARG INSTALL_CLAUDE_CLI=true
-RUN apt-get update && apt-get install -y --no-install-recommends curl ca-certificates \
+# git: karo-contract kommt aus Karos Repository (siehe requirements.txt).
+RUN apt-get update && apt-get install -y --no-install-recommends curl ca-certificates git \
     && if [ "$INSTALL_CLAUDE_CLI" = "true" ]; then \
          curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
          && apt-get install -y --no-install-recommends nodejs \

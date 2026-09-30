@@ -466,3 +466,57 @@ def test_cli_unblock_export(env, monkeypatch, capsys):
     assert cli.main(argv) == 0
     assert "Keine Verwerfung gefunden" in capsys.readouterr().out
     assert cli.main(["review", "unblock-export", e["concept_id"]]) == 1
+
+
+def test_consumer_findings_reach_the_lesson_author(env, monkeypatch):
+    """Was der Abnehmer beanstanden wuerde, sieht der Autor – vorher, nicht nachher.
+
+    Vorher fiel es erst beim Abnehmer auf: als Ablehnung, die gegen das Thema
+    zaehlte und es nach zweimal dauerhaft unlieferbar machte.
+    """
+    from kcteam import consumers
+    api, key, agent, db = env["api"], env["key"], env["agent"], env["db"]
+    gesehen = []
+
+    def meckert(lesson, umschlag):
+        gesehen.append(umschlag)
+        return ["Die Aufgabe zu 3/4 rechnet falsch."]
+
+    monkeypatch.setitem(consumers._REGISTER, "karo-adaptiv-v1",
+                        consumers.Abnehmer(befunde=meckert,
+                                           einordnung=lambda lesson, umschlag: []))
+    body = lesson_body(grade=7, concept_id="MA.ALGEBRA.GLEICHUNGEN")
+    eid = api.post("/v1/lessons", json=body, headers=h(key)).json()["export_id"]
+    agent.process_next()
+
+    # Die Pruefung lief, und sie sah die ganze Huelle – nicht nur den Text.
+    assert gesehen, "Die Pruefung des Abnehmers lief gar nicht"
+    assert gesehen[0]["subject"] == "Mathematik"
+    assert gesehen[0]["classification"]["source"] == "approved_curriculum"
+    assert gesehen[0]["format"] == "karo-adaptiv-v1"
+    # Sie wurde nicht ausgeliefert, und der Autor hat den Wortlaut bekommen –
+    # nicht nur ein "passt nicht". Mehrere Versuche: es war eine Rueckmeldung,
+    # kein einmaliges Nein.
+    stand = db.one("SELECT status, message FROM curriculum.lesson_exports WHERE id=%s", (eid,))
+    assert stand["status"] != "ready", "Was der Abnehmer verwerfen wuerde, darf nicht raus"
+    assert "3/4 rechnet falsch" in (stand["message"] or "")
+    assert len(gesehen) > 1, "Der Befund muss zu einem neuen Versuch fuehren"
+
+
+def test_what_the_service_delivers_passes_karos_own_check(env):
+    """Der Kern der Sache: was rausgeht, wuerde Karo annehmen.
+
+    Das war nicht so. Der Dienst pruefte mit einem Nachbau von Karos Regeln,
+    gab frei, Karos Import lehnte ab — und nach zwei Ablehnungen war das Thema
+    dauerhaft leer. Hier faehrt dieselbe Pruefung, die Karo faehrt, ueber die
+    fertige Antwort.
+    """
+    karo_contract = pytest.importorskip("karo_contract")
+    api, key, agent = env["api"], env["key"], env["agent"]
+    body = lesson_body(grade=6, concept_id="MA.BRUECHE.RABATTE_BERECHNEN")
+    eid = api.post("/v1/lessons", json=body, headers=h(key)).json()["export_id"]
+    agent.process_next()
+    antwort = api.get(f"/v1/lessons/{eid}", headers=h(key)).json()
+    assert antwort["status"] == "ready", antwort
+    assert antwort["contract_version"] == karo_contract.CONTRACT_VERSION
+    assert karo_contract.befunde(antwort, fach=antwort["subject"]) == []
