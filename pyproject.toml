@@ -33,3 +33,14 @@ include = ["kcteam*"]
 
 [tool.setuptools.package-data]
 kcteam = ["prompts/*.md", "sql/*.sql", "subjects/*.yaml", "subjects/families/*.yaml", "admin/templates/*.html"]
+
+[tool.pytest.ini_options]
+# `tools` (der Reset der Testdatenbank) liegt neben `kcteam` im Baum, wird aber
+# nicht mitinstalliert. Ohne diese Zeile findet es nur, wer pytest als
+# `python -m pytest` aufruft — in der CI laeuft es als Programm, und dort
+# schlugen 77 Tests mit ModuleNotFoundError fehl.
+pythonpath = ["."]
+# Nur die eigenen Tests. In der CI liegt Karos Repository als Unterordner
+# daneben (fuer den Vertragstest); ohne diese Zeile sammelt pytest dessen
+# Tests gleich mit und fuehrt sie im falschen Arbeitsverzeichnis aus.
+testpaths = ["tests"]
