@@ -92,6 +92,15 @@ class AgentRunner:
     def calls(self) -> int:
         return self._calls
 
+    @property
+    def budget(self) -> int:
+        return int(self.cfg.p("max_agent_calls", 3000))
+
+    def remaining(self) -> int:
+        """Wie viele Modellaufrufe noch im Kontingent sind."""
+        with self._lock:
+            return max(0, self.budget - self._calls)
+
     def _count(self) -> None:
         if self.stop.is_set():
             raise RunStopped("Lauf wurde angehalten")

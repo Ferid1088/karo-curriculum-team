@@ -24,6 +24,7 @@ import os
 import secrets
 import time
 from contextlib import asynccontextmanager
+from datetime import date
 from typing import Any, Literal
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
@@ -72,6 +73,9 @@ class ResolveIn(BaseModel):
     keywords: list[str] = Field(default_factory=list, max_length=20)
     tasks: list[str] = Field(default_factory=list, max_length=20)
     include_bundle: bool = False
+    #: Bis wann der Abnehmer es braucht (Pruefungsdatum). Steuert nur die
+    #: Reihenfolge der Schlange, nie den Inhalt. Ohne Angabe: nicht dringend.
+    needed_by: date | None = None
 
 
 class FormatIn(BaseModel):
@@ -91,6 +95,8 @@ class LessonIn(BaseModel):
     tasks: list[str] = Field(default_factory=list, max_length=20)
     concept_id: str | None = Field(default=None, max_length=120)
     format: FormatIn
+    #: Siehe ResolveIn.needed_by.
+    needed_by: date | None = None
 
 
 class PathIn(BaseModel):
@@ -191,13 +197,21 @@ def create_app(db: DB | None = None, webhooks: bool = False) -> FastAPI:
         topic = body.topic or ""
         from .ondemand import scrub
         try:
-            return get_db().one("SELECT karo.resolve_topic(%s,%s,%s,%s,%s,%s) AS r",
-                                (body.subject, body.grade, topic, body.keywords, Jsonb(scrub(body.tasks)),
-                                 c["tenant"]))["r"]
+            r = get_db().one("SELECT karo.resolve_topic(%s,%s,%s,%s,%s,%s) AS r",
+                             (body.subject, body.grade, topic, body.keywords, Jsonb(scrub(body.tasks)),
+                              c["tenant"]))["r"]
         except Exception as exc:  # noqa: BLE001 – Eingabefehler aus der Datenbank (RAISE EXCEPTION)
             if type(exc).__name__ == "RaiseException":
                 raise HTTPException(422, str(exc).splitlines()[0]) from None
             raise
+        if r.get("request_id") and getattr(body, "needed_by", None):
+            # Gleiche Anfragen werden zusammengelegt. Braucht eine Familie es
+            # frueher als die, die zuerst bestellt hat, gilt das fruehere
+            # Datum — sonst wartet die Arbeit am Freitag hinter „irgendwann".
+            get_db().query("""UPDATE curriculum.topic_requests
+                              SET needed_by = least(coalesce(needed_by, %s), %s), updated_at=now()
+                              WHERE id=%s""", (body.needed_by, body.needed_by, r["request_id"]))
+        return r
 
     @app.post("/v1/resolve")
     def resolve(body: ResolveIn, c: dict = Depends(client),
@@ -262,17 +276,20 @@ def create_app(db: DB | None = None, webhooks: bool = False) -> FastAPI:
             try:
                 if body.concept_id:
                     row = lessons.request_export(d, client_id=c["id"], spec=spec, grade=body.grade,
-                                                 concept_id=body.concept_id, topic=body.topic)
+                                                 concept_id=body.concept_id, topic=body.topic,
+                                                 needed_by=body.needed_by)
                     _link(row["id"], c["id"])
                     return lessons.export_response(row, d)
                 r = _resolve(c, body)
                 st = r.get("status")
                 if st in ("found", "other_level"):
                     row = lessons.request_export(d, client_id=c["id"], spec=spec, grade=body.grade,
-                                                 concept_id=r["concepts"][0]["concept_id"], topic=body.topic)
+                                                 concept_id=r["concepts"][0]["concept_id"], topic=body.topic,
+                                                 needed_by=body.needed_by)
                 elif st == "ordered":
                     row = lessons.request_export(d, client_id=c["id"], spec=spec, grade=body.grade,
-                                                 topic=body.topic, request_id=r["request_id"])
+                                                 topic=body.topic, request_id=r["request_id"],
+                                                 needed_by=body.needed_by)
                 else:
                     return 200, {"status": "unavailable", "reason_code": r.get("reason_code") or st,
                                  "request_id": r.get("request_id")}

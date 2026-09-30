@@ -255,10 +255,14 @@ class DB:
                    (status, Jsonb(stats), error, run_id))
 
     def log_call(self, run_id, role, provider, model, entity_id, in_tok, out_tok, ms, ok, error=None) -> None:
-        self.query("""INSERT INTO curriculum.agent_calls(run_id, role, provider, model, entity_id,
+        # Das Thema kommt mit in die Zeile. Ohne das steht im Protokoll
+        # „EXP-412", und niemand kann sagen, was ein Thema gekostet hat —
+        # steuern laesst sich nur, was man auch sieht.
+        self.query("""INSERT INTO curriculum.agent_calls(run_id, role, provider, model, entity_id, topic,
                       input_tokens, output_tokens, duration_ms, ok, error)
-                      VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
-                   (run_id, role, provider, model, entity_id, in_tok, out_tok, ms, ok, (error or "")[:2000] or None))
+                      SELECT %s,%s,%s,%s,%s, curriculum.topic_of(%s), %s,%s,%s,%s,%s""",
+                   (run_id, role, provider, model, entity_id, entity_id,
+                    in_tok, out_tok, ms, ok, (error or "")[:2000] or None))
 
     def log_review(self, run_id, entity_type, entity_id, stage, reviewer, decision, round_=1, findings=None, note=None):
         self.query("""INSERT INTO curriculum.reviews(run_id, entity_type, entity_id, stage, reviewer, decision, round, findings, note)
@@ -492,7 +496,10 @@ class DB:
                              WHERE id = (SELECT id FROM curriculum.topic_requests
                                          WHERE (status='queued' OR (status='ready' AND stage='resume'))
                                            AND next_attempt_at <= now()
-                                         ORDER BY priority DESC, created_at
+                                         -- Zuerst, was am ehesten gebraucht wird: das Thema fuer
+                                         -- die Arbeit am Freitag vor dem fuer die in drei Wochen.
+                                         -- Ohne Datum heisst nicht dringend.
+                                         ORDER BY needed_by NULLS LAST, priority DESC, created_at
                                          FOR UPDATE SKIP LOCKED LIMIT 1)
                              RETURNING *""")
         return rows[0] if rows else None

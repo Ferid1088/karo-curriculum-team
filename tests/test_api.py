@@ -520,3 +520,99 @@ def test_what_the_service_delivers_passes_karos_own_check(env):
     assert antwort["status"] == "ready", antwort
     assert antwort["contract_version"] == karo_contract.CONTRACT_VERSION
     assert karo_contract.befunde(antwort, fach=antwort["subject"]) == []
+
+
+def test_the_queue_serves_the_nearest_exam_first(env):
+    """Reihenfolge nach Prüfungsdatum, nicht nach Eingang.
+
+    Bei siebzehn Prüfungsthemen wartete das Thema fuer die Arbeit am Freitag
+    hinter dem fuer die Arbeit in drei Wochen. Wer zuerst bestellt, hat nicht
+    zuerst die Arbeit.
+    """
+    api, key, db = env["api"], env["key"], env["db"]
+    db.query("""DELETE FROM curriculum.lesson_exports
+                WHERE status IN ('queued','waiting','running')
+                   OR concept_id = ANY(%s)""",
+             (["MA.TEILBARKEIT.KGV", "MA.ZAHLEN.EINMALEINS", "MA.TEILBARKEIT.VIELFACHE"],))
+    spaet = api.post("/v1/lessons", json=lesson_body(grade=6, concept_id="MA.TEILBARKEIT.KGV",
+                                                     topic="kgv spaet", needed_by="2027-12-01"),
+                     headers=h(key)).json()
+    frueh = api.post("/v1/lessons", json=lesson_body(grade=6, concept_id="MA.ZAHLEN.EINMALEINS",
+                                                     topic="einmaleins frueh", needed_by="2027-10-02"),
+                     headers=h(key)).json()
+    ohne = api.post("/v1/lessons", json=lesson_body(grade=6, concept_id="MA.TEILBARKEIT.VIELFACHE",
+                                                    topic="vielfache ohne datum"), headers=h(key)).json()
+    for antwort in (spaet, frueh, ohne):
+        assert antwort["status"] == "pending", antwort
+    # Der Platz in der Schlange steht in der Antwort – „wird vorbereitet" ohne
+    # Zahl ist fuer eine Familie nicht von „haengt" zu unterscheiden.
+    stand = api.get(f"/v1/lessons/{frueh['export_id']}", headers=h(key)).json()
+    assert (stand["position"], stand["needed_by"]) == (1, "2027-10-02"), stand
+    assert api.get(f"/v1/lessons/{spaet['export_id']}", headers=h(key)).json()["position"] == 2
+    assert api.get(f"/v1/lessons/{ohne['export_id']}", headers=h(key)).json()["position"] == 3
+
+    genommen = [lessons.claim_export(db)["id"] for _ in range(3)]
+    assert genommen == [frueh["export_id"], spaet["export_id"], ohne["export_id"]]
+    db.query("DELETE FROM curriculum.lesson_exports WHERE id = ANY(%s)", (genommen,))
+
+
+def test_an_earlier_exam_moves_a_shared_topic_forward(env):
+    """Ein Thema, zwei Familien: das fruehere Datum gilt.
+
+    Sonst wartet die Arbeit am Freitag hinter einem „irgendwann", nur weil
+    das zuerst bestellt wurde.
+    """
+    api, key, other, db = env["api"], env["key"], env["other"], env["db"]
+    db.query("DELETE FROM curriculum.lesson_exports WHERE concept_id='MA.ZAHLEN.ZR100'")
+    body = lesson_body(grade=2, concept_id="MA.ZAHLEN.ZR100", topic="zahlenraum 100",
+                       needed_by="2027-12-24")
+    erste = api.post("/v1/lessons", json=body, headers=h(key)).json()
+    zweite = api.post("/v1/lessons", json={**body, "needed_by": "2027-10-05"}, headers=h(other)).json()
+    # Derselbe Auftrag – nicht zwei. Und mit dem frueheren Datum.
+    assert zweite["export_id"] == erste["export_id"], (erste, zweite)
+    frist = lambda: db.one("SELECT needed_by FROM curriculum.lesson_exports WHERE id=%s",
+                           (erste["export_id"],))["needed_by"].isoformat()
+    assert frist() == "2027-10-05"
+    # Ein spaeteres Datum schiebt es nicht wieder nach hinten.
+    api.post("/v1/lessons", json={**body, "needed_by": "2028-01-01"}, headers=h(key))
+    assert frist() == "2027-10-05"
+
+
+def test_model_calls_are_logged_per_topic(env):
+    """Was ein Thema gekostet hat, muss im Protokoll stehen.
+
+    Vorher stand dort „EXP-412" und sonst nichts. Steuern laesst sich nur,
+    was man auch sieht.
+    """
+    api, key, db = env["api"], env["key"], env["db"]
+    thema = "Rabatte ausrechnen üben"
+    db.query("DELETE FROM curriculum.lesson_exports WHERE concept_id='MA.BRUECHE.RABATTE_BERECHNEN'")
+    antwort = api.post("/v1/lessons", json=lesson_body(grade=6, topic=thema,
+                                                       concept_id="MA.BRUECHE.RABATTE_BERECHNEN"),
+                       headers=h(key)).json()
+    eid = antwort["export_id"]
+    for i in range(3):
+        db.log_call(None, "lektionsautor", "mock", "mock-1", f"EXP-{eid}", 120, 80, 10, i != 2,
+                    None if i != 2 else "Zeitüberschreitung")
+    kosten = db.one("SELECT * FROM curriculum.topic_cost WHERE topic=%s", (thema,))
+    assert kosten["calls"] == 3 and kosten["failed"] == 1 and kosten["tokens"] == 600
+    assert db.one("""SELECT count(*) AS n FROM curriculum.agent_calls
+                     WHERE entity_id=%s AND topic IS NULL""", (f"EXP-{eid}",))["n"] == 0
+    # auch fuer Auftraege, nicht nur fuer Lektionen
+    rid = db.query("""INSERT INTO curriculum.topic_requests(subject, grade, topic, fingerprint)
+                      VALUES ('Mathematik', 6, %s, %s) RETURNING id""", (thema + " neu", "fp-test"))[0]["id"]
+    db.log_call(None, "kurator", "mock", "mock-1", f"REQ-{rid}", 10, 10, 5, True)
+    assert db.one("SELECT topic FROM curriculum.agent_calls ORDER BY id DESC LIMIT 1")["topic"] == thema + " neu"
+
+
+def test_no_new_job_when_the_daily_quota_is_spent(env, monkeypatch):
+    """Ein halb bezahlter Auftrag hilft niemandem – dann lieber gar nicht anfangen."""
+    agent, db = env["agent"], env["db"]
+    verbraucht = db.one("""SELECT count(*) AS n FROM curriculum.agent_calls
+                           WHERE created_at >= date_trunc('day', now())""")["n"]
+    monkeypatch.setattr(agent, "daily_calls", verbraucht + agent.KOSTEN_JE_AUFTRAG - 1)
+    assert agent.kontingent()["left"] == agent.KOSTEN_JE_AUFTRAG - 1
+    assert not agent.kontingent_reicht()
+    assert agent.process_next() is False
+    monkeypatch.setattr(agent, "daily_calls", 0)          # 0 = keine Grenze
+    assert agent.kontingent()["left"] is None and agent.kontingent_reicht()

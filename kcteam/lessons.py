@@ -267,8 +267,23 @@ def consumer_findings(lesson: Any, concept: dict, spec: dict, *, version: int | 
                                               subject=subject), spec)
 
 
+def _vorziehen(cur, row: dict, needed_by) -> dict:
+    """Dasselbe Thema, aber jemand braucht es frueher: das Datum ruecken.
+
+    Mehrere Familien teilen sich eine Lektion. Braucht eine sie fuer die
+    Arbeit am Freitag und eine andere hatte sie fuer „irgendwann" bestellt,
+    darf die erste nicht hinter der zweiten warten.
+    """
+    if needed_by is None or (row.get("needed_by") is not None and row["needed_by"] <= needed_by):
+        return row
+    cur.execute("""UPDATE curriculum.lesson_exports SET needed_by=%s, updated_at=now()
+                   WHERE id=%s RETURNING *""", (needed_by, row["id"]))
+    return cur.fetchone() or row
+
+
 def request_export(db, *, client_id: int | None, spec: dict, grade: int, concept_id: str | None = None,
-                   topic: str | None = None, request_id: int | None = None) -> dict:
+                   topic: str | None = None, request_id: int | None = None,
+                   needed_by=None) -> dict:
     """Gibt einen vorhandenen gültigen Export zurück oder legt einen neuen an (wartend, wenn das Konzept
     erst noch über einen Auftrag entsteht)."""
     fhash = format_hash(spec)
@@ -285,16 +300,16 @@ def request_export(db, *, client_id: int | None, spec: dict, grade: int, concept
                                   "cl": cl, "cv": CONTRACT_VERSION})
             row = cur.fetchone()
             if row:
-                return row
+                return _vorziehen(cur, row, needed_by)
             rejected = client_rejections(cur, cl, concept_id, c["version"], grade, fhash) if client_id else 0
             if rejected > max_client_rejects():
                 # zu oft verworfen: nicht endlos neu schreiben – ein Mensch sieht es sich an
                 return _unavailable("rejected_by_client", spec["id"], concept_id, c["version"])
             cur.execute("""INSERT INTO curriculum.lesson_exports(client_id, format_id, format_hash, format_spec,
-                             grade, topic, concept_id, concept_version, status, forked_for)
-                           VALUES (%s,%s,%s,%s,%s,%s,%s,%s,'queued',%s) RETURNING *""",
+                             grade, topic, concept_id, concept_version, status, forked_for, needed_by)
+                           VALUES (%s,%s,%s,%s,%s,%s,%s,%s,'queued',%s,%s) RETURNING *""",
                         (client_id, spec["id"], fhash, Jsonb(spec), grade, topic, concept_id, c["version"],
-                         client_id if rejected else None))
+                         client_id if rejected else None, needed_by))
             return cur.fetchone()
         _lock(cur, f"export-wait:{request_id}:{grade}:{fhash}")
         cur.execute("""SELECT * FROM curriculum.lesson_exports WHERE request_id=%s AND grade=%s AND format_hash=%s
@@ -303,11 +318,11 @@ def request_export(db, *, client_id: int | None, spec: dict, grade: int, concept
                     (request_id, grade, fhash))
         row = cur.fetchone()
         if row:
-            return row
+            return _vorziehen(cur, row, needed_by)
         cur.execute("""INSERT INTO curriculum.lesson_exports(client_id, format_id, format_hash, format_spec, grade,
-                         topic, request_id, status)
-                       VALUES (%s,%s,%s,%s,%s,%s,%s,'waiting') RETURNING *""",
-                    (client_id, spec["id"], fhash, Jsonb(spec), grade, topic, request_id))
+                         topic, request_id, status, needed_by)
+                       VALUES (%s,%s,%s,%s,%s,%s,%s,'waiting',%s) RETURNING *""",
+                    (client_id, spec["id"], fhash, Jsonb(spec), grade, topic, request_id, needed_by))
         row = cur.fetchone()
         cur.execute("SELECT pg_notify('kcteam_requests', 'export-wait')")   # Auftrag evtl. schon fertig
         return row
@@ -437,13 +452,49 @@ def promote_waiting(db) -> int:
 
 
 def claim_export(db) -> dict | None:
+    """Die naechste Lektion – die am ehesten gebraucht wird, nicht die aelteste.
+
+    Bei siebzehn Prüfungsthemen wartete das Thema fuer die Arbeit am Freitag
+    hinter dem fuer die Arbeit in drei Wochen. Ein Datum macht daraus eine
+    Reihenfolge, die sich einer Familie erklaeren laesst. Ohne Datum heisst
+    nicht dringend, nicht unwichtig: es kommt danach, in der alten Ordnung.
+    """
     rows = db.query("""UPDATE curriculum.lesson_exports SET status='running', attempts=attempts+1,
                          heartbeat_at=now(), updated_at=now()
                        WHERE id = (SELECT id FROM curriculum.lesson_exports
                                    WHERE status='queued' AND next_attempt_at <= now()
-                                   ORDER BY id FOR UPDATE SKIP LOCKED LIMIT 1)
+                                   ORDER BY needed_by NULLS LAST, id
+                                   FOR UPDATE SKIP LOCKED LIMIT 1)
                        RETURNING *""")
     return rows[0] if rows else None
+
+
+def queue_position(db, eid: int) -> dict:
+    """Wo steht dieser Auftrag, und wie lange dauert es ungefaehr noch?
+
+    „Wird vorbereitet" ohne Zahl ist fuer eine Familie nicht von „haengt"
+    zu unterscheiden. Die Schaetzung ist grob und wird als grob ausgewiesen:
+    sie zaehlt, was vor diesem Auftrag liegt, und rechnet mit der gemessenen
+    Dauer der letzten fertigen Lektionen.
+    """
+    row = db.one("""SELECT status, needed_by, id FROM curriculum.lesson_exports WHERE id=%s""", (eid,))
+    if not row or row["status"] not in ("waiting", "queued", "running"):
+        return {"position": 0, "waiting": 0, "seconds": None}
+    # Dieselbe Ordnung wie in `claim_export`: erst die mit Datum, dann der Rest.
+    davor = db.one("""SELECT count(*) AS n FROM curriculum.lesson_exports
+                      WHERE status IN ('queued', 'running')
+                        AND ((needed_by IS NOT NULL
+                              AND (%(nb)s::date IS NULL OR (needed_by, id) < (%(nb)s::date, %(id)s)))
+                          OR (needed_by IS NULL AND %(nb)s::date IS NULL AND id < %(id)s))""",
+                   {"nb": row["needed_by"], "id": row["id"]})["n"]
+    offen = db.one("""SELECT count(*) AS n FROM curriculum.lesson_exports
+                      WHERE status IN ('waiting', 'queued', 'running')""")["n"]
+    dauer = db.one("""SELECT avg(extract(epoch FROM finished_at - created_at)) AS s
+                      FROM (SELECT created_at, finished_at FROM curriculum.lesson_exports
+                            WHERE status='ready' AND finished_at IS NOT NULL
+                            ORDER BY finished_at DESC LIMIT 20) letzte""")["s"]
+    return {"position": davor + 1, "waiting": offen,
+            "seconds": int((davor + 1) * dauer) if dauer else None}
 
 
 def finish_export(db, eid: int, status: str, lesson: Any = None, reason_code: str | None = None,
@@ -592,7 +643,12 @@ def export_response(row: dict, db=None) -> tuple[int, dict]:
                 base['subject'] = fach['name']
         return 200, {**base, "status": "ready", "lesson": row["lesson"]}
     if row["status"] in ("waiting", "queued", "running"):
-        return 202, {**base, "status": "pending", "stage": row["status"], "retry_after": 15}
+        # Mit Platz in der Schlange und grober Schaetzung: „wird vorbereitet"
+        # ohne Zahl ist fuer eine Familie nicht von „haengt" zu unterscheiden.
+        warte = queue_position(db, row["id"]) if db is not None else {}
+        frist = row.get("needed_by")
+        return 202, {**base, "status": "pending", "stage": row["status"], "retry_after": 15,
+                     "needed_by": frist.isoformat() if frist else None, **warte}
     return 200, {**base, "status": "unavailable", "reason_code": row["reason_code"] or row["status"]}
 
 

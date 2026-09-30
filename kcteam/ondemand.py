@@ -125,6 +125,10 @@ class CurriculumAgent:
         self.fast_lane = bool(oc.get("fast_lane", True))
         self.prefetch_next = int(oc.get("prefetch_next", 1))
         self.allow_unknown = bool(oc.get("allow_unknown_subjects", False))
+        # Tageskontingent an Modellaufrufen. 0 = keine Grenze. Die Umgebung
+        # gewinnt: im Betrieb wird daran gedreht, nicht in der Datei.
+        self.daily_calls = int(os.environ.get("KCTEAM_DAILY_AGENT_CALLS")
+                               or oc.get("daily_agent_calls", 0))
         self.stop = threading.Event()
         self.current: Pipeline | None = None
         self.current_export: Pipeline | None = None
@@ -179,9 +183,41 @@ class CurriculumAgent:
             if p is not None:
                 p.shutdown()
 
+    #: Was ein Auftrag im Schnitt an Modellaufrufen kostet. Grob, aber der
+    #: Punkt ist nicht die Genauigkeit: einen Auftrag anzufangen, fuer den das
+    #: Kontingent erkennbar nicht mehr reicht, verbraucht den Rest und liefert
+    #: nichts. Dann lieber gar nicht anfangen und es sagen.
+    KOSTEN_JE_AUFTRAG = 6
+
+    def kontingent(self) -> dict:
+        """Tageskontingent an Modellaufrufen: verbraucht, uebrig, Grenze.
+
+        Gezaehlt wird in der Datenbank, nicht im Prozess: ein Neustart darf
+        das Kontingent nicht zuruecksetzen, und mehrere Worker teilen es sich.
+        Grenze 0 heisst: keine Grenze.
+        """
+        grenze = self.daily_calls
+        verbraucht = self.db.one("""SELECT count(*) AS n FROM curriculum.agent_calls
+                                    WHERE created_at >= date_trunc('day', now())""")["n"]
+        return {"limit": grenze, "used": verbraucht,
+                "left": max(0, grenze - verbraucht) if grenze else None}
+
+    def kontingent_reicht(self) -> bool:
+        """Reicht das Kontingent noch fuer einen weiteren Auftrag?"""
+        stand = self.kontingent()
+        return stand["left"] is None or stand["left"] >= self.KOSTEN_JE_AUFTRAG
+
     def process_next(self) -> bool:
         # Lektionen zuerst (ein Aufruf, ein Kind wartet vielleicht); im Dienst übernimmt das auch der Worker
         lessons.promote_waiting(self.db)
+        if not self.kontingent_reicht():
+            # Angefangene Auftraege laufen zu Ende; neue werden nicht mehr
+            # begonnen. Das Kontingent halb in einen Auftrag zu stecken, der
+            # dann abbricht, hilft niemandem.
+            stand = self.kontingent()
+            self.log(f"⏸ Tageskontingent fast erschoepft ({stand['used']}/{stand['limit']} Aufrufe) – "
+                     "keine neuen Auftraege")
+            return False
         if self.process_export():
             return True
         req = self.db.claim_request()
