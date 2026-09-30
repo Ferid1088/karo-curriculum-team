@@ -24,7 +24,7 @@ import os
 import secrets
 import time
 from contextlib import asynccontextmanager
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from fastapi.responses import JSONResponse, Response
@@ -100,6 +100,11 @@ class PathIn(BaseModel):
 
 class RejectIn(BaseModel):
     reason: str = Field(min_length=1, max_length=2000)
+    #: Woran es lag. "content" = fachlich falsch und zaehlt gegen den
+    #: Abnehmer; "contract" = Format, Version oder Pflichtfeld passt nicht
+    #: und sagt nichts ueber den Inhalt. Aeltere Abnehmer schicken das Feld
+    #: nicht — fuer die bleibt es bei "content" wie bisher.
+    reason_code: Literal["content", "contract"] = "content"
 
 
 # ---------------------------------------------------------------- App
@@ -321,8 +326,14 @@ def create_app(db: DB | None = None, webhooks: bool = False) -> FastAPI:
         d = get_db()
         d.log_review(None, "export", f"EXP-{eid}", "lesson", "client", "rejected", 1,
                      [{"error": body.reason[:2000]}], c["name"])
-        new = lessons.reject_by_client(d, eid, c["id"], body.reason)
-        if new.get("status") == "unavailable":
+        new = lessons.reject_by_client(d, eid, c["id"], body.reason, body.reason_code)
+        if body.reason_code == "contract":
+            # Kein Inhaltsproblem: das gehoert einem Menschen auf den Tisch,
+            # nicht dem Lektionsautor. Und es sperrt das Thema nicht.
+            d.enqueue_human("export", f"EXP-{eid}", "lesson",
+                            f"Vertragsverstoss gemeldet von {c['name']}: {body.reason[:300]}",
+                            {"content": row["lesson"], "raw": row["lesson"]}, kind="error")
+        elif new.get("status") == "unavailable":
             d.enqueue_human("export", f"EXP-{eid}", "lesson",
                             f"{new.get('rejections')}× vom Abnehmer {c['name']} verworfen: {body.reason[:300]}",
                             {"content": row["lesson"], "raw": row["lesson"]}, kind="error")

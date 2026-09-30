@@ -334,3 +334,135 @@ def test_meta_nennt_vertrag_stand_und_formate(env):
     assert d["contract_version"] == lessons.CONTRACT_VERSION
     assert d["formats"] == list(lessons.SUPPORTED_FORMATS)
     assert "git_sha" in d
+
+
+def test_contract_rejection_never_blocks_a_topic(env):
+    """Zweimal wegen Vertrag verworfen – das Thema bleibt lieferbar.
+
+    Der tote Punkt war: Karos Importprüfung verwarf, weil ein Pflichtfeld
+    fehlte, der Dienst zählte das als „Inhalt schlecht“, und nach zwei
+    Meldungen bekam Karo zu diesem Thema nie wieder eine Lektion. Ein
+    Vertragsverstoß sagt aber nichts über den Inhalt.
+    """
+    api, key, agent, db = env["api"], env["key"], env["agent"], env["db"]
+    body = lesson_body(grade=9, concept_id="MA.TEILBARKEIT.KGV")
+    eid = api.post("/v1/lessons", json=body, headers=h(key)).json()["export_id"]
+    agent.process_next()
+    assert api.get(f"/v1/lessons/{eid}", headers=h(key)).json()["status"] == "ready"
+
+    for _ in range(lessons.max_client_rejects() + 1):
+        r = api.post(f"/v1/lessons/{eid}/reject",
+                     json={"reason": "classification.first_contact_grade fehlt", "reason_code": "contract"},
+                     headers=h(key))
+        assert r.status_code == 200, r.text
+        # keine neue Fassung: neu schreiben hilft gegen einen Vertragsfehler nicht
+        assert r.json()["export_id"] == eid
+
+    # zählt nicht gegen den Abnehmer …
+    with db.tx() as cur:
+        row = db.one("SELECT * FROM curriculum.lesson_exports WHERE id=%s", (eid,))
+        assert lessons.client_rejections(cur, db.one("SELECT id FROM curriculum.api_clients WHERE name='karo-test'")["id"],
+                                         row["concept_id"], row["concept_version"], row["grade"],
+                                         row["format_hash"]) == 0
+    # … und das Thema kommt weiter an
+    again = api.post("/v1/lessons", json=body, headers=h(key)).json()
+    assert again["status"] == "ready" and again["export_id"] == eid
+    # aber ein Mensch sieht es
+    offen = review.list_open(db)
+    assert any(x["entity_id"] == f"EXP-{eid}" and "Vertrag" in (x["reason"] or "") for x in offen), offen
+    assert db.one("""SELECT reason_code, contract_version FROM curriculum.lesson_export_rejections
+                     WHERE export_id=%s""", (eid,)) == {"reason_code": "contract",
+                                                        "contract_version": lessons.CONTRACT_VERSION}
+
+
+def test_blocked_topic_can_be_released_again(env):
+    """Inhaltlich blockiertes Thema: der Knopf hebt die Sperre auf."""
+    api, key, agent, db = env["api"], env["key"], env["agent"], env["db"]
+    body = lesson_body(grade=9, concept_id="MA.TEILBARKEIT.VIELFACHE")
+    first = api.post("/v1/lessons", json=body, headers=h(key)).json()["export_id"]
+    agent.process_next()
+    last, r = first, None
+    for _ in range(lessons.max_client_rejects() + 2):
+        r = api.post(f"/v1/lessons/{last}/reject", json={"reason": "fachlich falsch"}, headers=h(key))
+        if r.json()["status"] == "unavailable":
+            break
+        last = r.json()["export_id"]
+        agent.process_next()
+    assert r.json()["reason_code"] == "rejected_by_client"
+    assert api.post("/v1/lessons", json=body, headers=h(key)).json()["status"] == "unavailable"
+
+    row = db.one("SELECT * FROM curriculum.lesson_exports WHERE id=%s", (first,))
+    assert lessons.unblock_export(db, row["concept_id"], row["grade"], row["format_id"], "karo-test") > 0
+    wieder = api.post("/v1/lessons", json=body, headers=h(key)).json()
+    assert wieder["status"] in ("ready", "pending"), wieder
+
+
+def test_a_new_contract_version_clears_old_rejections(env):
+    """Wechselt die Vertragsfassung, sind alte Verwerfungen gegenstandslos."""
+    api, key, agent, db = env["api"], env["key"], env["agent"], env["db"]
+    body = lesson_body(grade=9, concept_id="MA.ALGEBRA.TERME")
+    first = api.post("/v1/lessons", json=body, headers=h(key)).json()["export_id"]
+    agent.process_next()
+    last, r = first, None
+    for _ in range(lessons.max_client_rejects() + 2):
+        r = api.post(f"/v1/lessons/{last}/reject", json={"reason": "fachlich falsch"}, headers=h(key))
+        if r.json()["status"] == "unavailable":
+            break
+        last = r.json()["export_id"]
+        agent.process_next()
+    assert r.json()["status"] == "unavailable"
+    # so, als wären die Verwerfungen unter einer älteren Fassung entstanden
+    db.query("UPDATE curriculum.lesson_export_rejections SET contract_version='karo-adaptiv-v1.0'")
+    wieder = api.post("/v1/lessons", json=body, headers=h(key)).json()
+    assert wieder["status"] != "unavailable", wieder
+
+
+def test_admin_release_button_lifts_a_block(env):
+    """Derselbe Weg wie `kcteam review unblock-export`, nur als Knopf.
+
+    Der Datenbank-Browser liest sonst ausschließlich. Dieser eine Knopf
+    schreibt – über eine getrennte Verbindung, damit die Leseverbindung
+    schreibgeschützt bleibt.
+    """
+    from fastapi.testclient import TestClient
+
+    from kcteam.admin import ReadOnlyDB, create_app
+    db = env["db"]
+    e = db.one("""SELECT id, concept_id, grade, format_id FROM curriculum.lesson_exports
+                  WHERE concept_id IS NOT NULL ORDER BY id LIMIT 1""")
+    c = db.one("SELECT id FROM curriculum.api_clients ORDER BY id LIMIT 1")
+    db.query("""INSERT INTO curriculum.lesson_export_rejections(export_id, client_id, reason, reason_code)
+                VALUES (%s,%s,'zu Testzwecken','content')
+                ON CONFLICT (export_id, client_id) DO UPDATE SET reason_code='content'""", (e["id"], c["id"]))
+    os.environ["ADMIN_PASSWORD"] = "pw-test"
+    ui = TestClient(create_app(ReadOnlyDB(URL), "/nonexistent", write_db=db))
+    a = ("admin", "pw-test")
+    seite = ui.get(f"/curriculum/exports/{e['id']}", auth=a)
+    assert seite.status_code == 200 and "Wieder freigeben" in seite.text
+    assert ui.post(f"/curriculum/exports/{e['id']}/freigeben").status_code == 401
+    r = ui.post(f"/curriculum/exports/{e['id']}/freigeben", auth=a, follow_redirects=False)
+    assert r.status_code == 303
+    assert db.one("""SELECT count(*) AS n FROM curriculum.lesson_export_rejections
+                     WHERE export_id=%s""", (e["id"],))["n"] == 0
+    assert lessons.unblock_export(db, e["concept_id"], e["grade"], e["format_id"]) == 0
+
+
+def test_cli_unblock_export(env, monkeypatch, capsys):
+    """`kcteam review unblock-export <konzept> <klasse> <format>` auf der Kommandozeile."""
+    from kcteam import cli
+    db = env["db"]
+    e = db.one("""SELECT id, concept_id, grade, format_id FROM curriculum.lesson_exports
+                  WHERE concept_id IS NOT NULL ORDER BY id LIMIT 1""")
+    c = db.one("SELECT id, name FROM curriculum.api_clients ORDER BY id LIMIT 1")
+    db.query("""INSERT INTO curriculum.lesson_export_rejections(export_id, client_id, reason, reason_code)
+                VALUES (%s,%s,'zu Testzwecken','content')
+                ON CONFLICT (export_id, client_id) DO UPDATE SET reason_code='content'""", (e["id"], c["id"]))
+    monkeypatch.setenv("DATABASE_URL", URL)
+    argv = ["review", "unblock-export", e["concept_id"].lower(), str(e["grade"]), e["format_id"]]
+    assert cli.main(argv) == 0
+    assert "1 Verwerfung(en) aufgehoben." in capsys.readouterr().out
+    assert db.one("""SELECT count(*) AS n FROM curriculum.lesson_export_rejections
+                     WHERE export_id=%s""", (e["id"],))["n"] == 0
+    assert cli.main(argv) == 0
+    assert "Keine Verwerfung gefunden" in capsys.readouterr().out
+    assert cli.main(["review", "unblock-export", e["concept_id"]]) == 1

@@ -70,9 +70,29 @@ CREATE TABLE IF NOT EXISTS curriculum.lesson_export_rejections (
     export_id  bigint NOT NULL REFERENCES curriculum.lesson_exports(id) ON DELETE CASCADE,
     client_id  int NOT NULL REFERENCES curriculum.api_clients(id) ON DELETE CASCADE,
     reason     text,
+    -- Warum verworfen wurde, entscheidet ueber die Folgen:
+    --   'content'  = fachlich falsch. Zaehlt gegen den Abnehmer; nach
+    --                KCTEAM_MAX_CLIENT_REJECTS wird nicht mehr neu geschrieben.
+    --   'contract' = Format, Version oder Pflichtfeld passt nicht. Das sagt
+    --                nichts ueber den Inhalt und darf ein Thema nicht sperren;
+    --                es gehoert auf den Tisch eines Menschen.
+    reason_code text NOT NULL DEFAULT 'content'
+                CHECK (reason_code IN ('content', 'contract')),
+    -- Mit welcher Vertragsfassung der Abnehmer damals sprach. Aendert sie
+    -- sich, sind alte Ablehnungen gegenstandslos.
+    contract_version text,
     created_at timestamptz NOT NULL DEFAULT now(),
     PRIMARY KEY (export_id, client_id)
 );
+ALTER TABLE curriculum.lesson_export_rejections
+    ADD COLUMN IF NOT EXISTS reason_code text NOT NULL DEFAULT 'content';
+ALTER TABLE curriculum.lesson_export_rejections
+    ADD COLUMN IF NOT EXISTS contract_version text;
+ALTER TABLE curriculum.lesson_export_rejections
+    DROP CONSTRAINT IF EXISTS lesson_export_rejections_reason_code_check;
+ALTER TABLE curriculum.lesson_export_rejections
+    ADD CONSTRAINT lesson_export_rejections_reason_code_check
+    CHECK (reason_code IN ('content', 'contract'));
 
 -- Wer hat welchen Export angefragt (Exporte werden über Abnehmer hinweg geteilt; lesen darf nur, wer angefragt hat)
 CREATE TABLE IF NOT EXISTS curriculum.lesson_export_clients (

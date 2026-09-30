@@ -4,6 +4,7 @@
   python -m kcteam run --subject Mathematik --grades 3-8 --blocks Brüche --provider claude_token
   python -m kcteam status [--subject Mathematik]
   python -m kcteam review list | show ID | approve ID | reject ID | retry ID  [--note "..."]
+  python -m kcteam review unblock-export MA.BRUECHE 5 karo-adaptiv-v1   Thema wieder freigeben
   python -m kcteam export --subject Mathematik
   python -m kcteam preview -b MA.BRUECHE   HTML-Vorschau der Visuals
   python -m kcteam catalog             HTML-Galerie aller Visual-Typen
@@ -29,7 +30,7 @@ from pathlib import Path
 
 import psycopg
 
-from . import review
+from . import lessons, review
 from .agents import BudgetExhausted, RateLimited
 from .config import load_config, load_karo_spec
 from .db import DB
@@ -232,6 +233,13 @@ def cmd_status(cfg, args) -> int:
 def cmd_review(cfg, args) -> int:
     db = DB(cfg.database_url)
     db.migrate()
+    if args.action == "unblock-export":
+        if args.id is None or len(args.rest) != 2:
+            print("Aufruf: kcteam review unblock-export <konzept> <klasse> <format>")
+            return 1
+        n = lessons.unblock_export(db, args.id.upper(), int(args.rest[0]), args.rest[1], args.client)
+        print(f"{n} Verwerfung(en) aufgehoben." if n else "Keine Verwerfung gefunden – nichts zu tun.")
+        return 0
     if args.action == "list":
         rows = review.list_open(db)
         if not rows:
@@ -242,8 +250,9 @@ def cmd_review(cfg, args) -> int:
     if args.id is None:
         print("Bitte eine ID angeben.")
         return 1
+    ident = int(args.id)
     if args.action == "show":
-        q = review.show(db, args.id)
+        q = review.show(db, ident)
         if not q:
             print("Nicht gefunden.")
             return 1
@@ -253,7 +262,7 @@ def cmd_review(cfg, args) -> int:
                          ensure_ascii=False, indent=2, default=str))
         return 0
     fn = {"approve": review.approve, "reject": review.reject, "retry": review.retry}[args.action]
-    print(fn(db, args.id, args.note or "", args.who))
+    print(fn(db, ident, args.note or "", args.who))
     return 0
 
 
@@ -599,8 +608,10 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--subject", "-s")
 
     p = sub.add_parser("review", help="menschliche Prüfung")
-    p.add_argument("action", choices=["list", "show", "approve", "reject", "retry"])
-    p.add_argument("id", nargs="?", type=int)
+    p.add_argument("action", choices=["list", "show", "approve", "reject", "retry", "unblock-export"])
+    p.add_argument("id", nargs="?", help="ID des Eintrags – bei unblock-export: das Konzept")
+    p.add_argument("rest", nargs="*", help="bei unblock-export: Klasse und Format")
+    p.add_argument("--client", help="nur die Verwerfungen dieses Abnehmers aufheben")
     p.add_argument("--note", "-n", help="Begründung / Hinweis ans Team")
     p.add_argument("--who", default="human", help="Name der prüfenden Person")
 

@@ -1,8 +1,11 @@
-"""Datenbank-Browser: Curriculum (Postgres) und Karo (SQLite) ansehen – nur lesen.
+"""Datenbank-Browser: Curriculum (Postgres) und Karo (SQLite) ansehen – fast nur lesen.
 
 Sicherheit:
 - Startet nicht ohne ADMIN_PASSWORD; HTTP Basic Auth (Benutzer ADMIN_USER, Standard „admin“).
 - Postgres-Sitzungen sind READ ONLY (jede Transaktion), dazu ein Zeitlimit pro Abfrage.
+- Einzige Ausnahme: „Wieder freigeben“ an einer Lektion. Das ist eine fest
+  verdrahtete Anweisung ohne Eingabe aus der URL und benutzt eine eigene,
+  schreibende Verbindung – nirgendwo sonst wird geschrieben.
 - Karos SQLite-Datei wird mit mode=ro geöffnet (Volume zusätzlich :ro gemountet).
 - Spalten mit Geheimnissen (password, secret, token, key_hash …) werden nie angezeigt.
 - Tabellen- und Spaltennamen kommen nur aus dem Katalog der Datenbank, nie aus der URL in SQL.
@@ -22,11 +25,12 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import Depends, FastAPI, HTTPException, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.templating import Jinja2Templates
 from psycopg import sql as pgsql
 
+from .. import lessons
 from ..db import DB
 
 HIDDEN = re.compile(r"pass(word)?|secret|token|key_hash|api_?key|credential", re.IGNORECASE)
@@ -79,12 +83,13 @@ TEMPLATES.env.filters["short"] = lambda v, n=80: (lambda s: s if len(s) <= n els
     _pretty(v).replace("\n", " "))
 
 
-def create_app(db: DB | None = None, karo_db: str | None = None) -> FastAPI:
+def create_app(db: DB | None = None, karo_db: str | None = None,
+               write_db: DB | None = None) -> FastAPI:
     user = os.environ.get("ADMIN_USER", "admin")
     password = os.environ.get("ADMIN_PASSWORD", "")
     if not password:
         raise RuntimeError("ADMIN_PASSWORD ist nicht gesetzt")
-    state: dict[str, Any] = {"db": db}
+    state: dict[str, Any] = {"db": db, "write_db": write_db}
     karo_path = karo_db or os.environ.get("KARO_DB_PATH", "/karo/karo.db")
     security = HTTPBasic(realm="Karo Datenbank-Browser")
     app = FastAPI(title="Karo Datenbank-Browser", docs_url=None, redoc_url=None, openapi_url=None)
@@ -110,6 +115,13 @@ def create_app(db: DB | None = None, karo_db: str | None = None) -> FastAPI:
         if state["db"] is None:
             state["db"] = ReadOnlyDB(os.environ.get("DATABASE_URL", ""))
         return state["db"]
+
+    def pg_write() -> DB:
+        """Nur für „Wieder freigeben“. Eine eigene Verbindung – die zum Lesen
+        bleibt schreibgeschützt, sonst wäre die Zusage dieses Moduls hinfällig."""
+        if state["write_db"] is None:
+            state["write_db"] = DB(os.environ.get("DATABASE_URL", ""))
+        return state["write_db"]
 
     def sq() -> sqlite3.Connection | None:
         if not Path(karo_path).exists():
@@ -239,7 +251,28 @@ def create_app(db: DB | None = None, karo_db: str | None = None) -> FastAPI:
         if not e:
             raise HTTPException(404)
         e = {k: v for k, v in e.items() if k != "format_spec"}
-        return render(request, "export.html", e=e)
+        verworfen = pg_safe(lambda: pg().query(
+            """SELECT c.name AS abnehmer, x.reason_code, x.contract_version, x.reason, x.created_at
+               FROM curriculum.lesson_export_rejections x
+               JOIN curriculum.api_clients c ON c.id = x.client_id
+               WHERE x.export_id = %s ORDER BY x.created_at""", (eid,)), default=[]) or []
+        return render(request, "export.html", e=e, verworfen=verworfen)
+
+    @app.post("/curriculum/exports/{eid}/freigeben")
+    def export_unblock(eid: int, _u: str = Depends(auth)):
+        """Verwerfungen zu diesem Thema aufheben – der Weg aus der Sackgasse.
+
+        Verwirft ein Abnehmer eine Lektion öfter als erlaubt, liefert der
+        Dienst sie ihm nicht mehr. Lag es an einem Fehler des Abnehmers, hilft
+        kein Neuschreiben, sondern nur dieser Knopf. Dasselbe tut
+        `kcteam review unblock-export`.
+        """
+        e = pg().one("""SELECT concept_id, grade, format_id FROM curriculum.lesson_exports
+                        WHERE id=%s""", (eid,))
+        if not e or not e["concept_id"]:
+            raise HTTPException(404)
+        lessons.unblock_export(pg_write(), e["concept_id"], e["grade"], e["format_id"])
+        return RedirectResponse(f"/curriculum/exports/{eid}", 303)
 
     @app.get("/curriculum/clients", response_class=HTMLResponse)
     def clients(request: Request, _u: str = Depends(auth)):

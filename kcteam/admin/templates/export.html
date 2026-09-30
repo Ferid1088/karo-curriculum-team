@@ -4,6 +4,17 @@
 <div class="crumbs"><a href="/curriculum/exports">Lektionen</a> / #{{ e.id }}</div>
 <h1>Lektion #{{ e.id }} <span class="pill s-{{ e.status }}">{{ e.status }}</span></h1>
 <div class="kv card">{% for k, v in e.items() if k != 'lesson' %}<div>{{ k }}</div><div>{% if k == 'concept_id' and v %}<a href="/curriculum/concepts/{{ v }}">{{ v }}</a>{% else %}{{ v|pretty }}{% endif %}</div>{% endfor %}</div>
+{% if verworfen %}
+<h2>Verworfen von Abnehmern</h2>
+<table><thead><tr><th>Abnehmer</th><th>Grund</th><th>Vertragsfassung</th><th>Meldung</th><th>Wann</th></tr></thead><tbody>
+{% for v in verworfen %}<tr><td>{{ v.abnehmer }}</td><td>{{ v.reason_code }}</td><td>{{ v.contract_version or '' }}</td><td>{{ v.reason|short(200) }}</td><td>{{ v.created_at }}</td></tr>{% endfor %}
+</tbody></table>
+<form method="post" action="/curriculum/exports/{{ e.id }}/freigeben">
+  <p class="small muted">Hebt die Verwerfungen zu {{ e.concept_id }} / Klasse {{ e.grade }} / {{ e.format_id }} auf.
+     Danach wird die Lektion wieder ausgeliefert. Für den Fall, dass der Fehler beim Abnehmer lag.</p>
+  <button type="submit">Wieder freigeben</button>
+</form>
+{% endif %}
 {% set l = e.lesson %}
 {% if l and l.fehlertypen is defined %}
 <h2>{{ l.konzept.label }} <span class="muted small">Kl. {{ l.konzept.klasse_von }}–{{ l.konzept.klasse_bis }}</span></h2>

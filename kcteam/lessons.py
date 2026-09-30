@@ -185,21 +185,32 @@ def max_client_rejects() -> int:
 
 
 #: Vorhandene Fassung suchen. Exporte werden zwischen Abnehmern geteilt – außer einer Fassung, die dieser
-#: Abnehmer verworfen hat, und eigenen Fassungen anderer Abnehmer („forked_for“).
+#: Abnehmer verworfen hat, und eigenen Fassungen anderer Abnehmer („forked_for“). Verworfen zählt hier nur,
+#: was der Abnehmer inhaltlich und unter der heutigen Vertragsfassung beanstandet hat.
 _LOOKUP = """SELECT e.* FROM curriculum.lesson_exports e
              WHERE e.concept_id=%(c)s AND e.concept_version=%(v)s AND e.grade=%(g)s AND e.format_hash=%(h)s
                AND e.status = ANY(%(live)s)
                AND (e.forked_for IS NULL OR e.forked_for = %(cl)s)
                AND NOT EXISTS (SELECT 1 FROM curriculum.lesson_export_rejections x
-                               WHERE x.export_id=e.id AND x.client_id=%(cl)s)
+                               WHERE x.export_id=e.id AND x.client_id=%(cl)s
+                                 AND x.reason_code='content'
+                                 AND (x.contract_version IS NULL OR x.contract_version=%(cv)s))
              ORDER BY (e.forked_for IS NOT NULL) DESC, e.id DESC LIMIT 1"""
 
 
 def client_rejections(cur, client_id, concept_id, version, grade, fhash) -> int:
+    """Wie oft dieser Abnehmer den *Inhalt* verworfen hat.
+
+    Vertragsablehnungen zaehlen nicht mit: dass ein Pflichtfeld fehlt, sagt
+    nichts ueber die Lektion. Und Ablehnungen aus einer aelteren
+    Vertragsfassung ebenso wenig — sie sind mit dem Wechsel gegenstandslos.
+    """
     cur.execute("""SELECT count(*) AS n FROM curriculum.lesson_export_rejections x
                    JOIN curriculum.lesson_exports e ON e.id=x.export_id
                    WHERE x.client_id=%s AND e.concept_id=%s AND e.concept_version=%s AND e.grade=%s
-                     AND e.format_hash=%s""", (client_id, concept_id, version, grade, fhash))
+                     AND e.format_hash=%s AND x.reason_code='content'
+                     AND (x.contract_version IS NULL OR x.contract_version=%s)""",
+                (client_id, concept_id, version, grade, fhash, CONTRACT_VERSION))
     return cur.fetchone()["n"]
 
 
@@ -242,7 +253,7 @@ def request_export(db, *, client_id: int | None, spec: dict, grade: int, concept
             grade = content_grade(c, grade)
             _lock(cur, _key(concept_id, c["version"], grade, fhash))
             cur.execute(_LOOKUP, {"c": concept_id, "v": c["version"], "g": grade, "h": fhash, "live": list(LIVE),
-                                  "cl": cl})
+                                  "cl": cl, "cv": CONTRACT_VERSION})
             row = cur.fetchone()
             if row:
                 return row
@@ -273,7 +284,8 @@ def request_export(db, *, client_id: int | None, spec: dict, grade: int, concept
         return row
 
 
-def reject_by_client(db, eid: int, client_id: int, reason: str) -> dict:
+def reject_by_client(db, eid: int, client_id: int, reason: str,
+                     reason_code: str = "content") -> dict:
     """Abnehmer verwirft eine Lektion (seine eigene Prüfung). Die geteilte Fassung bleibt für die anderen
     Abnehmer unverändert; für diesen Abnehmer entsteht eine eigene, die seine Meldung als Befund – nicht als
     Anweisung – berücksichtigt. Nach `max_client_rejects()` Verwerfungen: nicht mehr neu schreiben."""
@@ -281,8 +293,21 @@ def reject_by_client(db, eid: int, client_id: int, reason: str) -> dict:
         cur.execute("SELECT * FROM curriculum.lesson_exports WHERE id=%s", (eid,))
         old = cur.fetchone()
         _lock(cur, _key(old["concept_id"], old["concept_version"], old["grade"], old["format_hash"]))
-        cur.execute("""INSERT INTO curriculum.lesson_export_rejections(export_id, client_id, reason)
-                       VALUES (%s,%s,%s) ON CONFLICT DO NOTHING""", (eid, client_id, reason[:2000]))
+        if reason_code not in ("content", "contract"):
+            reason_code = "content"
+        cur.execute("""INSERT INTO curriculum.lesson_export_rejections
+                         (export_id, client_id, reason, reason_code, contract_version)
+                       VALUES (%s,%s,%s,%s,%s)
+                       ON CONFLICT (export_id, client_id) DO UPDATE
+                         SET reason=EXCLUDED.reason, reason_code=EXCLUDED.reason_code,
+                             contract_version=EXCLUDED.contract_version""",
+                    (eid, client_id, reason[:2000], reason_code, CONTRACT_VERSION))
+        if reason_code == "contract":
+            # Kein Inhaltsproblem: neu schreiben wuerde denselben Text noch
+            # einmal erzeugen und Modellzeit kosten. Die Fassung bleibt
+            # stehen und wird wieder ausgeliefert, sobald die Vertragsfassung
+            # auf beiden Seiten stimmt — `_LOOKUP` uebergeht diese Ablehnung.
+            return {**old, "rejections": 0}
         n = client_rejections(cur, client_id, old["concept_id"], old["concept_version"], old["grade"],
                               old["format_hash"])
         if n > max_client_rejects():
@@ -297,6 +322,29 @@ def reject_by_client(db, eid: int, client_id: int, reason: str) -> dict:
         cur.execute("INSERT INTO curriculum.lesson_export_clients VALUES (%s,%s) ON CONFLICT DO NOTHING",
                     (new["id"], client_id))
         return {**new, "rejections": n}
+
+
+def unblock_export(db, concept_id: str, grade: int, format_id: str, client: str | None = None) -> int:
+    """Verwerfungen zu einem Thema aufheben, damit es wieder ausgeliefert wird.
+
+    Fuer den Fall, dass ein Abnehmer aus einem eigenen Fehler heraus verworfen
+    hat: der Fehler ist behoben, aber der Zaehler steht noch und das Thema
+    bleibt fuer ihn leer. Gibt zurueck, wie viele Verwerfungen aufgehoben
+    wurden.
+    """
+    with db.tx() as cur:
+        cur.execute("""DELETE FROM curriculum.lesson_export_rejections x
+                       USING curriculum.lesson_exports e, curriculum.api_clients c
+                       WHERE e.id = x.export_id AND c.id = x.client_id
+                         AND e.concept_id = %s AND e.grade = %s AND e.format_id = %s
+                         AND (%s::text IS NULL OR c.name = %s)
+                       RETURNING x.export_id""",
+                    (concept_id, grade, format_id, client, client))
+        rows = cur.fetchall()
+    for r in rows:
+        db.log_review(None, "export", f"EXP-{r['export_id']}", "lesson", client or "human",
+                      "unblocked", 1, [], "Verwerfung aufgehoben")
+    return len(rows)
 
 
 def promote_waiting(db) -> int:
