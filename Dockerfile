@@ -19,5 +19,10 @@ COPY . .
 RUN useradd -m kcteam && mkdir -p /data /karo /karo-export && chown -R kcteam /app /data /karo-export
 USER kcteam
 
+# Ohne das puffert Python seine Ausgabe, sobald sie in eine Pipe geht: in
+# `docker logs` erscheint dann waehrend der Arbeit gar nichts, und erst ein
+# Absturz spuelt den Puffer. Ein Agent, der minutenlang schweigt, ist im
+# Betrieb nicht nachvollziehbar.
+ENV PYTHONUNBUFFERED=1
 ENTRYPOINT ["python", "-m", "kcteam"]
 CMD ["run"]
