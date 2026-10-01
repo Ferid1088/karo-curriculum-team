@@ -746,3 +746,40 @@ def test_der_browser_zeigt_die_pause_ganz_oben(env):
     finally:
         pause_store.aufheben(db, "claude_token")
     assert "Pausiert bis" not in ui.get("/", auth=("admin", "pw-test")).text
+
+
+def test_die_lieferung_nennt_die_voraussetzungen(env):
+    """Vertrag 1.4: Voraussetzungen gehoeren zur Lektion.
+
+    Der Dienst fuehrt die Ketten seit jeher. Solange er sie nicht mitgeliefert
+    hat, blieb dem Abnehmer bei einem haengenden Kind nur, einen Menschen zu
+    holen — auch wenn in Wahrheit nur eine Voraussetzung fehlte.
+    """
+    api, key, agent, db = env["api"], env["key"], env["agent"], env["db"]
+    r = api.post("/v1/lessons", json=lesson_body(topic="Ungleichnamige Brüche addieren"), headers=h(key))
+    eid = r.json()["export_id"]
+    assert agent.process_next()
+    out = api.get(f"/v1/lessons/{eid}", headers=h(key)).json()
+    assert out["status"] == "ready"
+
+    erwartet = {z["prerequisite_id"]: z["title"] for z in db.query(
+        """SELECT p.prerequisite_id, c.title
+             FROM curriculum.concept_prerequisites p
+             JOIN curriculum.concepts c ON c.id = p.prerequisite_id
+            WHERE p.concept_id = 'MA.BRUECHE.ADD_UNGL' AND c.status = 'approved'""")}
+    assert erwartet, "ohne Voraussetzungen im Katalog sagt dieser Test nichts"
+    assert {p["concept_id"]: p["title"] for p in out["prerequisites"]} == erwartet
+
+    # Was selbst noch nicht freigegeben ist, wird nicht genannt: der Abnehmer
+    # koennte es nicht lernen lassen. Nachtraeglich eingetragen, damit die
+    # Pipeline den Entwurf nicht vorher wieder wegraeumt.
+    with db.tx() as cur:
+        cur.execute("""INSERT INTO curriculum.concepts(id, block_id, subject_code, title,
+                           first_contact_grade, target_grade, status)
+                       SELECT 'MA.TEST.ENTWURF', block_id, subject_code, 'Noch nicht freigegeben',
+                              4, 5, 'draft'
+                         FROM curriculum.concepts WHERE id='MA.BRUECHE.ADD_UNGL'""")
+        cur.execute("INSERT INTO curriculum.concept_prerequisites "
+                    "VALUES ('MA.BRUECHE.ADD_UNGL', 'MA.TEST.ENTWURF')")
+    danach = api.get(f"/v1/lessons/{eid}", headers=h(key)).json()["prerequisites"]
+    assert {p["concept_id"] for p in danach} == set(erwartet)

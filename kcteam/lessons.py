@@ -14,7 +14,7 @@ from __future__ import annotations
 #: Auftrag ueber /v1/meta und stellt zurueck statt abzulehnen, wenn die
 #: Fassungen auseinanderlaufen — ein Versionsunterschied hat schon einmal
 #: jedes Thema dauerhaft unlieferbar gemacht.
-CONTRACT_VERSION = "karo-adaptiv-v1.3"
+CONTRACT_VERSION = "karo-adaptiv-v1.4"
 
 #: Formate, fuer die dieser Dienst eine eigene Pruefung mitbringt. Fuer alles
 #: andere bleibt er abnehmerneutral: er liefert aus, prueft aber nicht gegen
@@ -644,6 +644,18 @@ def export_response(row: dict, db=None) -> tuple[int, dict]:
                 return 200, {**base, 'status': 'unavailable', 'reason_code': 'classification_needs_review'}
             base['classification'] = dict(source='approved_curriculum',
                 first_contact_grade=concept['first_contact_grade'], target_grade=concept['target_grade'])
+            # Voraussetzungen gehoeren zur Lieferung (Vertrag 1.4). Der Dienst
+            # fuehrt sie seit jeher; der Abnehmer konnte sie nie sehen und
+            # musste deshalb bei jedem Scheitern einen Menschen holen, auch
+            # wenn nur eine Voraussetzung fehlte.
+            base['prerequisites'] = [
+                {"concept_id": p["prerequisite_id"], "title": p["title"]}
+                for p in db.query(
+                    """SELECT p.prerequisite_id, c.title
+                         FROM curriculum.concept_prerequisites p
+                         JOIN curriculum.concepts c ON c.id = p.prerequisite_id
+                        WHERE p.concept_id = %s AND c.status = 'approved'
+                        ORDER BY p.prerequisite_id""", (row['concept_id'],))]
             # Das Fach gehoert in die Antwort: der Abnehmer prueft damit, dass
             # keine Lernreihe aus einem anderen Curriculum bei ihm landet.
             # Solange das Feld fehlte, lief seine Pruefung ins Leere.
