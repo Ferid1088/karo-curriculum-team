@@ -36,8 +36,22 @@ def test_route_findings_ignores_warnings_and_routes_grades_to_meta():
 
 
 class _NullDB:
+    """Eine Datenbank, die nichts behaelt.
+
+    `query`/`one` gehoeren dazu, seit vor jedem Anbieteraufruf die
+    Kontingent-Pause gelesen wird (kcteam/pause_store.py). Leere Antworten
+    heissen hier: keine Pause, also laeuft der Aufruf — genau das will dieser
+    Test pruefen.
+    """
+
     def log_call(self, *a, **k):
         pass
+
+    def query(self, *a, **k):
+        return []
+
+    def one(self, *a, **k):
+        return None
 
 
 class _AlwaysLimited(Provider):

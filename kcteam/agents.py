@@ -11,6 +11,8 @@ from typing import Any, Callable, TypeVar
 
 from pydantic import BaseModel, ValidationError
 
+from . import kontingent, pause_store
+from .kontingent import KontingentErschoepft
 from .providers.base import Provider, ProviderError
 
 PROMPT_DIR = Path(__file__).parent / "prompts"
@@ -129,22 +131,56 @@ class AgentRunner:
             self._prompt_cache[key] = "\n\n".join(parts)
         return self._prompt_cache[key]
 
+    def _kontingent_pruefen(self) -> None:
+        """Vor jedem Aufruf: ist die Tuer gerade zu?
+
+        Hier steht der eine Riegel. Frueher lag das Wissen in einer
+        Prozessvariablen — ein Neustart wusste nichts davon, und die API
+        ohnehin nie. Jetzt fragt jeder Aufruf dieselbe Tabelle.
+        """
+        laufend = pause_store.aktiv(self.db, self.provider.name)
+        if not laufend:
+            return
+        pause_store.verhindert_zaehlen(self.db, self.provider.name)
+        raise KontingentErschoepft(
+            f"Kontingent von {self.provider.name} erschoepft, Pause bis "
+            f"{laufend['bis']:%d.%m. %H:%M} ({laufend['grund'][:120]})",
+            bis=laufend["bis"], provider=self.provider.name)
+
+    def _kontingent_merken(self, meldung: str) -> None:
+        erkannt, bis = kontingent.erkennen(meldung)
+        if not erkannt:
+            return
+        pause_store.setzen(self.db, self.provider.name, meldung, bis)
+        stand = pause_store.stand(self.db, self.provider.name)
+        raise KontingentErschoepft(
+            f"Kontingent von {self.provider.name} erschoepft, Pause bis "
+            f"{stand['bis']:%d.%m. %H:%M}", bis=stand["bis"], provider=self.provider.name)
+
     def _complete(self, *, role, system, prompt, model, web_search, meta, entity_id):
         """Anbieteraufruf mit Wiederholung bei vorübergehenden Fehlern (exponentiell + Zufall, retry-after)."""
         retries = int(self.cfg.p("provider_retries", 5))
+        # Ist die Pause gerade abgelaufen, darf genau EIN Aufruf durch: der
+        # Probeaufruf. Alle anderen warten weiter, bis er das Ergebnis kennt.
+        probe = pause_store.probe_beanspruchen(self.db, self.provider.name)
         for attempt in range(retries + 1):
             if self.stop.is_set():
                 raise RunStopped("Lauf wurde angehalten")
+            if not probe:
+                self._kontingent_pruefen()
             pause = self._cooldown_until - time.time()
             if pause > 0 and self.stop.wait(pause):
                 raise RunStopped("Lauf wurde angehalten")
             started = time.time()
             try:
-                return self.provider.complete(system=system, user=prompt, model=model,
-                                              web_search=web_search, meta=meta), started
+                ergebnis = self.provider.complete(system=system, user=prompt, model=model,
+                                                  web_search=web_search, meta=meta)
             except ProviderError as exc:
                 self.db.log_call(self.run_id, role, self.provider.name, model, entity_id, 0, 0,
                                  int((time.time() - started) * 1000), False, str(exc))
+                # Erschoepftes Kontingent ist kein wiederholbarer Fehler: hier
+                # endet der Versuch sofort, fuer alle Prozesse.
+                self._kontingent_merken(str(exc))
                 if not exc.retryable or attempt == retries:
                     if exc.rate_limited:
                         self.stop.set()
@@ -158,6 +194,11 @@ class AgentRunner:
                         self._cooldown_until = max(self._cooldown_until, time.time() + wait)
                 if self.stop.wait(wait):   # Abbruch (Strg+C, Budget) beendet das Warten sofort
                     raise RunStopped("Lauf wurde angehalten")
+            else:
+                if probe:
+                    # Der Probeaufruf kam durch — die Schlange laeuft weiter.
+                    pause_store.probe_geglueckt(self.db, self.provider.name)
+                return ergebnis, started
         raise ProviderError("unerreichbar")  # pragma: no cover
 
     def call(

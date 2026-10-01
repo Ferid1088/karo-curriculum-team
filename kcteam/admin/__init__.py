@@ -144,6 +144,16 @@ def create_app(db: DB | None = None, karo_db: str | None = None,
             return default if default is not None else {"error": str(exc).splitlines()[0]}
 
     # ------------------------------------------------------------ Übersicht
+    def kontingent_pause() -> dict | None:
+        """Laeuft gerade eine Kontingent-Pause? Gehoert ganz oben hin.
+
+        Ohne diesen Hinweis sieht ein stillstehender Dienst aus wie ein
+        kaputter — und man sucht den Fehler an der falschen Stelle.
+        """
+        from .. import pause_store
+        return pg_safe(lambda: pause_store.aktiv(pg(), "claude_token")
+                       or pause_store.aktiv(pg(), "anthropic_api"), default=None)
+
     @app.get("/", response_class=HTMLResponse)
     def home(request: Request, _u: str = Depends(auth)):
         d = pg()
@@ -167,7 +177,8 @@ def create_app(db: DB | None = None, karo_db: str | None = None,
                                                FROM lern_konzept GROUP BY 1 ORDER BY 2 DESC""").fetchall(),
                     "tabellen": len(_sq_tables(con)),
                 })
-        return render(request, "home.html", cur=cur, karo=karo)
+        return render(request, "home.html", cur=cur, karo=karo,
+                      pause=kontingent_pause())
 
     # ------------------------------------------------------------ Curriculum
     @app.get("/curriculum/subjects/{code}", response_class=HTMLResponse)

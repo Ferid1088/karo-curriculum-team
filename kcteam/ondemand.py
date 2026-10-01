@@ -19,6 +19,7 @@ import psycopg
 
 from . import lessons
 from .agents import BudgetExhausted
+from .kontingent import KontingentErschoepft
 from .integrator import check_graph
 from .pipeline import Pipeline, SubjectBlocked
 from .schemas import ConceptGraph, TopicBlock, TopicMatch
@@ -189,6 +190,28 @@ class CurriculumAgent:
     #: nichts. Dann lieber gar nicht anfangen und es sagen.
     KOSTEN_JE_AUFTRAG = 6
 
+    def _kontingent_zuruecklegen(self, tabelle: str, zeilen_id: int, versuche: int,
+                                 exc) -> None:
+        """Auftrag zuruecklegen, als waere er nie angefasst worden.
+
+        Kein verbrauchter Versuch, kein gezaehlter Fehler, kein Eintrag gegen
+        das Thema. Der naechste Versuch steht auf das Ende der Pause — nicht
+        frueher, sonst klopft er wieder gegen dieselbe Tuer.
+        """
+        bis = getattr(exc, "bis", None)
+        text = f"wartet auf das Kontingent: {exc}"[:500]
+        if tabelle == "lesson_exports":
+            self.db.query("""UPDATE curriculum.lesson_exports
+                               SET status='queued', attempts=%s, message=%s,
+                                   next_attempt_at=coalesce(%s, now() + interval '30 minutes')
+                             WHERE id=%s AND status='running'""",
+                          (max(0, versuche - 1), text, bis, zeilen_id))
+        else:
+            self._requeue(zeilen_id, attempts=max(0, versuche - 1), message=text)
+            self.db.query("""UPDATE curriculum.topic_requests
+                               SET next_attempt_at=coalesce(%s, now() + interval '30 minutes')
+                             WHERE id=%s""", (bis, zeilen_id))
+
     def kontingent(self) -> dict:
         """Tageskontingent an Modellaufrufen: verbraucht, uebrig, Grenze.
 
@@ -207,9 +230,22 @@ class CurriculumAgent:
         stand = self.kontingent()
         return stand["left"] is None or stand["left"] >= self.KOSTEN_JE_AUFTRAG
 
+    def pausiert(self) -> dict | None:
+        """Laeuft gerade eine Kontingent-Pause? Dann wird nichts angefasst."""
+        from . import pause_store
+        return pause_store.aktiv(self.db, self.provider.name)
+
     def process_next(self) -> bool:
         # Lektionen zuerst (ein Aufruf, ein Kind wartet vielleicht); im Dienst übernimmt das auch der Worker
         lessons.promote_waiting(self.db)
+        # Waehrend der Pause wird kein Auftrag angefasst. Ihn zu beanspruchen
+        # und gleich zurueckzulegen waere dasselbe wie klopfen: es verbraucht
+        # Zeit und schreibt Zeilen, die niemandem helfen.
+        ruht = self.pausiert()
+        if ruht:
+            self.log(f"⏸ Kontingent erschoepft, Pause bis {ruht['bis']:%H:%M} "
+                     f"({ruht['aufrufe_verhindert']} Aufrufe verhindert)")
+            return False
         if not self.kontingent_reicht():
             # Angefangene Auftraege laufen zu Ende; neue werden nicht mehr
             # begonnen. Das Kontingent halb in einen Auftrag zu stecken, der
@@ -228,6 +264,14 @@ class CurriculumAgent:
         with _Heartbeat(self.db, req["id"]):
             try:
                 self.handle(req)
+            except KontingentErschoepft as exc:
+                # Das Kontingent ist nicht die Schuld dieses Auftrags: kein
+                # Versuch verbraucht, kein Fehler gezaehlt. Er wartet, bis die
+                # Tuer wieder aufgeht, und zwar genau bis dahin.
+                self._kontingent_zuruecklegen("topic_requests", req["id"],
+                                              req["attempts"], exc)
+                self.log(f"⏸ #{req['id']} wartet auf das Kontingent: {exc}")
+                return False
             except BudgetExhausted as exc:   # Limit/Abbruch: später weitermachen, kein Fehlversuch
                 self._requeue(req["id"], attempts=req["attempts"] - 1, message=f"pausiert: {exc}"[:500])
                 self.db.query("UPDATE curriculum.topic_requests SET next_attempt_at=now() + interval '10 minutes' "
@@ -264,6 +308,11 @@ class CurriculumAgent:
         with _Heartbeat(self.db, row["id"], table="lesson_exports"):
             try:
                 self.handle_export(row)
+            except KontingentErschoepft as exc:
+                self._kontingent_zuruecklegen("lesson_exports", row["id"],
+                                              row["attempts"], exc)
+                self.log(f"⏸ Lektion #{row['id']} wartet auf das Kontingent: {exc}")
+                return False
             except BudgetExhausted as exc:
                 self.db.query("""UPDATE curriculum.lesson_exports SET status='queued', attempts=attempts-1,
                                    message=%s, next_attempt_at=now() + interval '10 minutes'

@@ -687,3 +687,62 @@ def test_without_the_consumer_package_nothing_is_delivered(env, monkeypatch):
                       headers=h(key)).json()
     assert andere["status"] == "pending"
     assert abarbeiten(andere["export_id"]) == "ready"
+
+
+def test_waehrend_der_pause_wird_kein_auftrag_angefasst(env):
+    """Kein Versuch verbraucht, kein Fehler gezaehlt, kein Modellaufruf.
+
+    Das Kontingent ist nicht die Schuld des Auftrags. Vorher wurde er trotzdem
+    beansprucht, lief ins Limit und verbrauchte einen seiner drei Versuche —
+    nach drei erschoepften Kontingenten war er endgueltig gescheitert.
+    """
+    import datetime as dt
+
+    from kcteam import pause_store
+    api, key, agent, db, prov = env["api"], env["key"], env["agent"], env["db"], env["prov"]
+    db.query("DELETE FROM curriculum.lesson_exports WHERE concept_id='MA.TEILBARKEIT.VIELFACHE'")
+    eid = api.post("/v1/lessons", json=lesson_body(grade=6, concept_id="MA.TEILBARKEIT.VIELFACHE",
+                                                   topic="vielfache ueben"),
+                   headers=h(key)).json()["export_id"]
+    vorher = dict(db.one("SELECT status, attempts FROM curriculum.lesson_exports WHERE id=%s", (eid,)))
+    aufrufe = prov.calls
+
+    pause_store.setzen(db, agent.provider.name, "claude CLI: You've hit your session limit",
+                       dt.datetime.now(dt.timezone.utc) + dt.timedelta(hours=1))
+    try:
+        assert agent.pausiert() is not None
+        assert agent.process_next() is False
+        assert prov.calls == aufrufe, "waehrend der Pause darf kein Modell gerufen werden"
+        nachher = dict(db.one("SELECT status, attempts FROM curriculum.lesson_exports WHERE id=%s", (eid,)))
+        assert nachher == vorher, "der Auftrag bleibt unberuehrt"
+    finally:
+        pause_store.aufheben(db, agent.provider.name)
+
+    # Pause vorbei: derselbe Auftrag laeuft weiter, mit allen Versuchen.
+    assert agent.process_export() is True
+    assert db.one("SELECT status FROM curriculum.lesson_exports WHERE id=%s",
+                  (eid,))["status"] == "ready"
+
+
+def test_der_browser_zeigt_die_pause_ganz_oben(env):
+    """Ein stillstehender Dienst sieht sonst aus wie ein kaputter."""
+    import datetime as dt
+
+    from fastapi.testclient import TestClient
+
+    from kcteam import pause_store
+    from kcteam.admin import ReadOnlyDB, create_app
+    db = env["db"]
+    pause_store.setzen(db, "claude_token", "claude CLI: You've hit your session limit",
+                       dt.datetime.now(dt.timezone.utc) + dt.timedelta(hours=2))
+    try:
+        os.environ["ADMIN_PASSWORD"] = "pw-test"
+        ui = TestClient(create_app(ReadOnlyDB(URL), "/nonexistent", write_db=db))
+        seite = ui.get("/", auth=("admin", "pw-test"))
+        assert seite.status_code == 200
+        assert "Pausiert bis" in seite.text
+        assert "session limit" in seite.text
+        assert "Probeaufruf" in seite.text
+    finally:
+        pause_store.aufheben(db, "claude_token")
+    assert "Pausiert bis" not in ui.get("/", auth=("admin", "pw-test")).text

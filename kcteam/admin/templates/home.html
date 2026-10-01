@@ -1,6 +1,17 @@
 {% extends "base.html" %}
 {% block main %}
 <h1>Übersicht</h1>
+{# Ganz oben: ein stillstehender Dienst sieht sonst aus wie ein kaputter,
+   und man sucht den Fehler an der falschen Stelle. #}
+{% if pause %}
+<div class="note" style="border-left:4px solid #c93; padding-left:.8rem">
+  <b>Pausiert bis {{ pause.bis.strftime('%d.%m. %H:%M') }}</b>
+  — Grund: {{ pause.grund }}<br>
+  <span class="muted small">Erkannt {{ pause.erkannt_am.strftime('%d.%m. %H:%M') }}.
+  {{ pause.aufrufe_verhindert }} Aufrufe wurden seitdem verhindert.
+  Danach läuft ein einzelner Probeaufruf; klappt er, geht die Warteschlange weiter.</span>
+</div>
+{% endif %}
 {% if cur.error %}<div class="note">Curriculum-Datenbank nicht erreichbar: {{ cur.error }}</div>{% else %}
 <div class="grid">
   <div class="card"><h3>Konzepte</h3>

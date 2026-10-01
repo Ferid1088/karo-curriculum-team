@@ -657,8 +657,18 @@ def export_response(row: dict, db=None) -> tuple[int, dict]:
         # ohne Zahl ist fuer eine Familie nicht von „haengt" zu unterscheiden.
         warte = queue_position(db, row["id"]) if db is not None else {}
         frist = row.get("needed_by")
-        return 202, {**base, "status": "pending", "stage": row["status"], "retry_after": 15,
-                     "needed_by": frist.isoformat() if frist else None, **warte}
+        antwort = {**base, "status": "pending", "stage": row["status"], "retry_after": 15,
+                   "needed_by": frist.isoformat() if frist else None, **warte}
+        # Ist das Kontingent erschoepft, wartet der Abnehmer nicht auf eine
+        # Minute, sondern auf eine Uhrzeit. Das zu verschweigen hiesse, eine
+        # Familie alle 15 Sekunden nachfragen zu lassen, bis morgen frueh.
+        if db is not None:
+            from . import pause_store
+            ruht = pause_store.aktiv(db, "claude_token") or pause_store.aktiv(db, "anthropic_api")
+            if ruht:
+                antwort["paused_until"] = ruht["bis"].isoformat()
+                antwort["retry_after"] = max(60, min(3600, ruht["rest_s"]))
+        return 202, antwort
     return 200, {**base, "status": "unavailable", "reason_code": row["reason_code"] or row["status"]}
 
 
