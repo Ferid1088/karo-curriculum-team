@@ -8,3 +8,7 @@ export/
 
 # Erzeugte Vorschauen und Berichte, keine Quellen.
 output/
+
+# Datenbank-Abzuege vor einem Eingriff. Daten, kein Quelltext —
+# und nichts, was in ein Repository gehoert.
+backups/
