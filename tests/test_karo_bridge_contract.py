@@ -160,3 +160,55 @@ def test_a_broken_envelope_is_reported_as_contract_not_as_content(env, tmp_path,
     else:
         pytest.fail("Das Thema blieb nach Vertragsmeldungen gesperrt — genau der alte Fehler")
     assert result["quelle"] == "curriculum"
+
+
+def test_die_wirkungsmeldung_kommt_echt_an_und_traegt_keine_kinddaten(env, tmp_path, monkeypatch):
+    """Karo meldet eine wirkungslose Erklaerung — gegen den echten Dienst.
+
+    Der Einzeltest auf jeder Seite haette den Fehler nicht gefunden, der hier
+    auffiel: das Eingabemodell lag in `create_app`, und FastAPI hielt den
+    Rumpf deshalb fuer einen Abfrageparameter. Jede Meldung wurde mit 422
+    abgewiesen, ohne dass es irgendwo auffiel.
+    """
+    import json
+
+    bridge, calls = karo(env, tmp_path, monkeypatch)
+    from app import config, db as karo_db, jobs
+    from app.adaptiv import store
+    dienst_db = env["db"]
+
+    payload = {}
+    for _ in range(12):
+        try:
+            ergebnis = bridge.prepare(config.load(), payload, "Ungleichnamige Brüche addieren",
+                                      "Mathematik", 6)
+            break
+        except jobs.Deferred as wartet:
+            payload = wartet.payload
+            env["agent"].process_next()
+    else:
+        pytest.fail("Ohne Lektion gibt es keine Erklaerung, deren Wirkung sich messen liesse")
+
+    fehlertyp_id = store.fehlertypen(ergebnis["konzept_id"])[0]["id"]
+    with karo_db.tx() as c:
+        c.execute("""INSERT INTO lern_erklaerung
+                       (fehlertyp_id, klasse, version, inhalt, visualisierung,
+                        schwierigkeit, quelle, geprueft_am, aktiv,
+                        ausgeliefert, folge_erfolge, created_at, updated_at)
+                     VALUES (?,6,99,'{}','{}',1,'test',?,1,20,2,?,?)""",
+                  (fehlertyp_id, karo_db.now(), karo_db.now(), karo_db.now()))
+
+    cfg = config.load()
+    assert bridge.wirkung_melden(cfg) == 1
+    gesendet = [b for m, p, b in calls if p == "/v1/explanations/feedback"]
+    assert gesendet, "die Meldung ging nie raus"
+    erlaubt = {"erklaerung_id", "konzept_key", "fehler_key", "klasse",
+               "ausgeliefert", "wirkte", "wirkquote"}
+    assert all(set(b) == erlaubt for b in gesendet[0]["befunde"]), gesendet[0]
+
+    eintrag = dienst_db.one("""SELECT * FROM curriculum.human_queue
+                                WHERE kind='error' ORDER BY id DESC LIMIT 1""")
+    assert eintrag and "2 von 20" in json.dumps(eintrag, ensure_ascii=False, default=str)
+
+    # Zweiter Lauf: dieselbe Erklaerung geht nicht noch einmal raus.
+    assert bridge.wirkung_melden(cfg) == 0

@@ -113,6 +113,18 @@ class RejectIn(BaseModel):
     reason_code: Literal["content", "contract"] = "content"
 
 
+class WirkungIn(BaseModel):
+    """Was der Abnehmer ueber eine wirkungslose Erklaerung melden darf.
+
+    Zahlen und Schluessel, sonst nichts. Das Modell steht hier oben und nicht
+    in `create_app`: mit `from __future__ import annotations` loest FastAPI
+    den Typnamen im Modul auf — eine Klasse in einer Funktion findet es nicht
+    und haelt den Rumpf fuer einen Abfrageparameter.
+    """
+    format: str = Field(min_length=1, max_length=120)
+    befunde: list[dict] = Field(min_length=1, max_length=200)
+
+
 # ---------------------------------------------------------------- App
 def create_app(db: DB | None = None, webhooks: bool = False) -> FastAPI:
     """`webhooks`: Webhooks aus diesem Prozess senden. Im Betrieb sendet sie der Curriculum-Agent (genau ein
@@ -329,6 +341,35 @@ def create_app(db: DB | None = None, webhooks: bool = False) -> FastAPI:
         return {"contract_version": lessons.CONTRACT_VERSION,
                 "git_sha": version.GIT_SHA,
                 "formats": list(lessons.SUPPORTED_FORMATS)}
+
+    @app.post("/v1/explanations/feedback")
+    def explanation_feedback(body: WirkungIn, c: dict = Depends(client)):
+        """Der Abnehmer meldet, welche Erklaerung bei ihm nicht wirkt.
+
+        Hier kommen ausschliesslich Zahlen an: Konzept, Fehlvorstellung,
+        Erklaerungs-ID, wie oft ausgeliefert, wie oft sie wirkte. Das reicht,
+        um sie neu schreiben zu lassen — und es ist alles, was der Dienst
+        ueber ein Kind je erfahren darf.
+        """
+        d = get_db()
+        angenommen = 0
+        for roh in body.befunde:
+            konzept = str(roh.get("konzept_key") or "")[:120]
+            if not konzept:
+                continue
+            zahlen = {k: roh.get(k) for k in
+                      ("erklaerung_id", "fehler_key", "klasse", "ausgeliefert",
+                       "wirkte", "wirkquote")}
+            d.enqueue_human(
+                "explanation", f"{c['name']}:{konzept}:{zahlen.get('erklaerung_id')}",
+                "wirkung",
+                f"Erklärung wirkt beim Abnehmer {c['name']} nicht: "
+                f"{zahlen.get('wirkte')} von {zahlen.get('ausgeliefert')} Einsätzen "
+                f"({zahlen.get('wirkquote')}) — Konzept {konzept}, "
+                f"Fehlvorstellung {zahlen.get('fehler_key')}",
+                {"konzept_key": konzept, **zahlen}, kind="error")
+            angenommen += 1
+        return {"angenommen": angenommen}
 
     @app.get("/v1/lessons/{eid}")
     def lesson_status(eid: int, c: dict = Depends(client)):

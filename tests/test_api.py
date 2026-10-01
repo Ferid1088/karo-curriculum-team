@@ -783,3 +783,38 @@ def test_die_lieferung_nennt_die_voraussetzungen(env):
                     "VALUES ('MA.BRUECHE.ADD_UNGL', 'MA.TEST.ENTWURF')")
     danach = api.get(f"/v1/lessons/{eid}", headers=h(key)).json()["prerequisites"]
     assert {p["concept_id"] for p in danach} == set(erwartet)
+
+
+def test_wirkungsmeldung_bringt_zahlen_zu_einem_menschen_und_sonst_nichts(env):
+    """Der Abnehmer meldet eine Erklaerung, die bei ihm nicht wirkt.
+
+    Was ankommen darf: Konzept, Fehlvorstellung, Erklaerungs-ID, zwei Zahlen.
+    Was nie ankommen darf: ein Kind, ein Antworttext, ein Blatt.
+    """
+    api, key, db = env["api"], env["key"], env["db"]
+
+    r = api.post("/v1/explanations/feedback", headers=h(key), json={
+        "format": "karo-adaptiv-v1",
+        "befunde": [{"erklaerung_id": 7, "konzept_key": "MA.BRUECHE.ADD_UNGL",
+                     "fehler_key": "nenner-addiert", "klasse": 6,
+                     "ausgeliefert": 20, "wirkte": 3, "wirkquote": 0.15}]})
+
+    assert r.status_code == 200 and r.json()["angenommen"] == 1
+    eintrag = db.one("""SELECT * FROM curriculum.human_queue
+                         WHERE kind='error' AND entity_id LIKE '%%MA.BRUECHE.ADD_UNGL%%'
+                         ORDER BY id DESC LIMIT 1""")
+    assert eintrag, "die Meldung erreicht keinen Menschen"
+    inhalt = json.dumps(eintrag, ensure_ascii=False, default=str)
+    assert "3 von 20" in inhalt and "nenner-addiert" in inhalt
+
+    # Ohne Konzept ist eine Meldung keine: sie wird gezaehlt, nicht gespeichert.
+    leer = api.post("/v1/explanations/feedback", headers=h(key),
+                    json={"format": "karo-adaptiv-v1", "befunde": [{"ausgeliefert": 9}]})
+    assert leer.status_code == 200 and leer.json()["angenommen"] == 0
+
+
+def test_wirkungsmeldung_braucht_einen_schluessel(env):
+    api = env["api"]
+    assert api.post("/v1/explanations/feedback",
+                    json={"format": "karo-adaptiv-v1", "befunde": [{"konzept_key": "X"}]}
+                    ).status_code in (401, 403)
