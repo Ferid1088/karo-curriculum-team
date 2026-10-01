@@ -14,7 +14,7 @@ from __future__ import annotations
 #: Auftrag ueber /v1/meta und stellt zurueck statt abzulehnen, wenn die
 #: Fassungen auseinanderlaufen — ein Versionsunterschied hat schon einmal
 #: jedes Thema dauerhaft unlieferbar gemacht.
-CONTRACT_VERSION = "karo-adaptiv-v1.2"
+CONTRACT_VERSION = "karo-adaptiv-v1.3"
 
 #: Formate, fuer die dieser Dienst eine eigene Pruefung mitbringt. Fuer alles
 #: andere bleibt er abnehmerneutral: er liefert aus, prueft aber nicht gegen
