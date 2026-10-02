@@ -21,6 +21,16 @@
 #         TEST_DATABASE_URL=postgresql://karo:karo@127.0.0.1:5434/karo_curriculum_test \
 #           APP_ENV=test ALLOW_DESTRUCTIVE_DB_RESET=YES python -m tools.reset_test_db --create
 
+# Gemeinsame Grenze fuer die dauerhaft laufenden Dienste: stdout-Logs
+# rotieren bei 20 MB pro Datei, hoechstens 3 Dateien — ein Dauerfehler
+# darf die Platte nicht fuellen. Fachliche Historie liegt in Postgres,
+# nicht in diesen Zeilen.
+x-logging: &app-logging
+  driver: json-file
+  options:
+    max-size: "20m"
+    max-file: "3"
+
 services:
   postgres:
     image: postgres:16
@@ -76,6 +86,7 @@ services:
     build: .
     command: ["serve"]
     env_file: .env
+    logging: *app-logging
     restart: unless-stopped
     stop_grace_period: 60s        # laufende KI-Aufrufe sauber beenden
     depends_on:
@@ -95,6 +106,7 @@ services:
       KCTEAM_API_HOST: 0.0.0.0
       KCTEAM_API_PORT: "8088"
       KCTEAM_API_WORKERS: ${KCTEAM_API_WORKERS:-2}
+    logging: *app-logging
     restart: unless-stopped
     depends_on:
       postgres:
@@ -116,6 +128,7 @@ services:
       ADMIN_HOST: 0.0.0.0
       ADMIN_PORT: "8090"
       KARO_DB_PATH: ${KARO_DB_PATH:-/karo/karo.db}
+    logging: *app-logging
     restart: on-failure:3
     depends_on:
       postgres:

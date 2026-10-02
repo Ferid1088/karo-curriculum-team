@@ -32,7 +32,7 @@ from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel, Field
 from psycopg.types.json import Jsonb
 
-from . import lessons, version
+from . import lessons, observability, version
 from .db import DB
 
 KEY_PREFIX = "kc_"
@@ -147,6 +147,10 @@ def create_app(db: DB | None = None, webhooks: bool = False) -> FastAPI:
                 state["db"].close_all()
 
     app = FastAPI(title="Karo Curriculum-Service", version="1", docs_url="/docs", redoc_url=None, lifespan=lifespan)
+    # Korrelation mit dem Aufrufer: Karo schickt X-Request-Id; die ID wandert
+    # in die Antwort und auf jede Logzeile dieser Anfrage (s. observability.py).
+    observability.install()
+    app.add_middleware(observability.RequestObservability)
     touch: dict[int, float] = {}
 
     def get_db() -> DB:
