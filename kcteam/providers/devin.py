@@ -202,7 +202,12 @@ class DevinProvider(Provider):
         key = _key(self.name, model, system, user)
         row = self._row(key)
         if row is None:
-            sid = self._create(system, user, meta)
+            try:
+                sid = self._create(system, user, meta)
+            except ProviderError as exc:
+                log.warning("devin_request_failed role=%s entity_id=%s attempt=%s error_type=create",
+                            meta.get("role"), meta.get("entity_id"), meta.get("attempt"))
+                raise exc
             self._save(key, sid, meta)
             log.info("devin_request_started session_id=%s role=%s entity_id=%s attempt=%s",
                      sid, meta.get("role"), meta.get("entity_id"), meta.get("attempt"))
@@ -211,6 +216,7 @@ class DevinProvider(Provider):
         if row["status"] == "failed":
             raise ProviderError(f"Devin-Session {row['session_id']} aufgegeben: {row.get('detail')}",
                                 retryable=False)
+        # status 'finished' faellt durch: das Ergebnis liegt bei Devin und wird unten erneut abgerufen
         started = self._age(row)
         if started > self.max_session_seconds:
             self._mark(key, "failed", detail="Zeitfenster überschritten")
@@ -219,7 +225,12 @@ class DevinProvider(Provider):
             raise ProviderError(f"Devin-Session {row['session_id']} älter als "
                                 f"{self.max_session_seconds}s — aufgegeben", retryable=False)
 
-        info = self._api("GET", f"/sessions/{row['session_id']}")
+        try:
+            info = self._api("GET", f"/sessions/{row['session_id']}")
+        except ProviderError as exc:
+            log.warning("devin_request_failed session_id=%s entity_id=%s error_type=poll",
+                        row["session_id"], meta.get("entity_id"))
+            raise exc
         state = str(info.get("status_enum") or info.get("status") or "working").lower()
         log.info("devin_request_status session_id=%s status=%s entity_id=%s",
                  row["session_id"], state, meta.get("entity_id"))
@@ -228,6 +239,8 @@ class DevinProvider(Provider):
         if state == _FERTIG or (state == _BLOCKIERT and isinstance(out, dict) and out):
             if not isinstance(out, dict) or not out:
                 self._mark(key, "failed", detail="finished ohne structured_output")
+                log.warning("devin_request_failed session_id=%s entity_id=%s error_type=invalid_output",
+                            row["session_id"], meta.get("entity_id"))
                 raise ProviderError(f"Devin-Session {row['session_id']} endete ohne "
                                     "structured_output", retryable=False)
             self._mark(key, "finished")
@@ -238,6 +251,8 @@ class DevinProvider(Provider):
         if state == _BLOCKIERT:
             if row.get("nudged"):
                 self._mark(key, "failed", detail="dauerhaft blocked")
+                log.warning("devin_request_failed session_id=%s entity_id=%s error_type=blocked",
+                            row["session_id"], meta.get("entity_id"))
                 raise ProviderError(f"Devin-Session {row['session_id']} wartet weiterhin auf "
                                     "Eingabe", retryable=False)
             # Einmal antworten: die Regeln verbieten Rückfragen, trotzdem kann Devin blockieren.
@@ -260,6 +275,8 @@ class DevinProvider(Provider):
             raise ProviderPending(f"Devin-Session {sid} neu gestartet ({state})",
                                   wait_seconds=self.poll_seconds, session_id=sid)
         self._mark(key, "failed", detail=f"Status {state}")
+        log.warning("devin_request_failed session_id=%s entity_id=%s error_type=session_%s",
+                    row["session_id"], meta.get("entity_id"), state)
         raise ProviderError(f"Devin-Session {row['session_id']} fehlgeschlagen: {state}",
                             retryable=False)
 
