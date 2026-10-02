@@ -34,6 +34,7 @@ import psycopg
 
 from . import lessons, review, version
 from .agents import BudgetExhausted, RateLimited
+from .providers.base import ProviderPending
 from .config import load_config, load_karo_spec
 from .db import DB
 from .pipeline import Pipeline, SubjectBlocked
@@ -178,6 +179,9 @@ def cmd_run(cfg, args) -> int:
     except RateLimited as exc:
         status, error = "rate_limited", str(exc)
         print(f"\n⏸ {exc}\n  Später erneut starten – der nächste Lauf macht an derselben Stelle weiter.")
+    except ProviderPending as exc:
+        status, error = "deferred", str(exc)
+        print(f"\n⏳ {exc}\n  Der Anbieter arbeitet noch – erneut starten, dann geht es an derselben Stelle weiter.")
     except BudgetExhausted as exc:
         status, error = "budget_exhausted", str(exc)
         print(f"\n⏸ {exc}. Der nächste Lauf macht an derselben Stelle weiter.")

@@ -185,7 +185,24 @@ In `.env` den gewünschten Zugang eintragen und `KCTEAM_PROVIDER` setzen, oder b
 | `anthropic_api` | `ANTHROPIC_API_KEY` | Abrechnung pro Token |
 | `openrouter` | `OPENROUTER_API_KEY` | Beliebige Modelle; Websuche über `:online` |
 | `openai` | `OPENAI_API_KEY` | Für GPT-Codex-Modelle (Responses API) |
+| `devin` | `DEVIN_API_KEY` | Devin API (v1), **asynchron**: jeder Modellaufruf ist eine Devin-Session. Der Agent legt den Auftrag in die Warteschlange zurück (kein Versuch verbraucht) und fragt den Status später erneut. Sessions stehen in `curriculum.provider_sessions` — ein Neustart legt nichts doppelt an |
 | `mock` | nichts | Testmodus, kostenlos, erzeugt Beispieldaten |
+
+**Devin:** `KCTEAM_PROVIDER=devin` (oder `KCTEAM_AI_PROVIDER=devin`) und `DEVIN_API_KEY` in `.env`. Der Schlüssel gehört ausschließlich dorthin — nie ins Repository. Fehlt er, bricht der Dienst beim Start ab statt still auf einen anderen Anbieter zu fallen. Feintuning in `config.yaml` unter `providers.devin` (`poll_seconds`, `max_session_seconds`, optional `max_acu_limit` als Kostenrahmen pro Session). Devin erhält nur den Auftrag (Fach, Klasse, Thema, Antwortschema) — keine Kinderdaten, keine hinterlegten Zugänge, kein Organisations-Wissen (`secret_ids`/`knowledge_ids` bleiben leer). Eine kurze Prüfung ohne Pipeline-Lauf:
+
+```bash
+KCTEAM_AI_PROVIDER=devin DEVIN_API_KEY=apk_... .venv/bin/python - <<'PY'
+from kcteam.providers.devin import DevinProvider
+from kcteam.providers.base import ProviderPending
+p = DevinProvider({})
+try:
+    p.complete(system="Du bist ein Test.", user="Antworte mit JSON {\"ok\": true}", model="devin")
+except ProviderPending as e:
+    print("Session angelegt:", e.session_id, "– im Dashboard: https://app.devin.ai")
+PY
+```
+
+Der Aufruf legt genau eine Session an (`devin-…`), wirft `ProviderPending` und kehrt zurück — die echte Abarbeitung holt der Worker später ab.
 
 Modelle stellst du in `config.yaml` ein, auch **pro Rolle** (`role_models`). Der Inspektor und der Kritiker sollten das stärkste Modell bekommen. Die eingetragenen Modellnamen bitte vor dem ersten Lauf mit der aktuellen Modellliste des Anbieters abgleichen.
 

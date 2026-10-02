@@ -214,6 +214,7 @@ class AgentRunner:
         meta: dict[str, Any] | None = None,
         stage: str | None = None,
     ) -> T:
+        meta = {"json_schema": schema.model_json_schema(), **(meta or {})}
         return self._call(role, task, payload, self.system_prompt(role, schema), schema.model_validate,
                           entity_id=entity_id, feedback=feedback, web_search=web_search, meta=meta, stage=stage)
 
@@ -232,6 +233,7 @@ class AgentRunner:
                 parts.append(extra_system)
             parts.append("## JSON-Schema deiner Antwort\n```json\n" + compact(json_schema) + "\n```")
             self._prompt_cache[key] = "\n\n".join(parts)
+        meta = {**(meta or {}), "json_schema": json_schema}
         return self._call(role, task, payload, self._prompt_cache[key], validate, entity_id=entity_id,
                           feedback=feedback, web_search=False, meta=meta, stage=stage)
 

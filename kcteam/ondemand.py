@@ -19,6 +19,7 @@ import psycopg
 
 from . import lessons
 from .agents import BudgetExhausted
+from .providers.base import ProviderPending
 from .kontingent import KontingentErschoepft
 from .integrator import check_graph
 from .pipeline import Pipeline, SubjectBlocked
@@ -272,6 +273,15 @@ class CurriculumAgent:
                                               req["attempts"], exc)
                 self.log(f"⏸ #{req['id']} wartet auf das Kontingent: {exc}")
                 return False
+            except ProviderPending as exc:
+                # Asynchroner Anbieter (Devin) arbeitet noch: zurück in die
+                # Warteschlange, kein Versuch verbraucht. Beim nächsten Lauf
+                # findet derselbe Aufruf seine Session wieder.
+                self._requeue(req["id"], attempts=req["attempts"] - 1, message=f"wartet: {exc}"[:500])
+                wait_s = int(exc.wait_seconds) if exc.wait_seconds is not None else 300
+                self.db.query("UPDATE curriculum.topic_requests SET next_attempt_at=now() + "
+                              "make_interval(secs => %s) WHERE id=%s", (wait_s, req["id"]))
+                self.log(f"⏳ #{req['id']} wartet auf den Anbieter: {exc}")
             except BudgetExhausted as exc:   # Limit/Abbruch: später weitermachen, kein Fehlversuch
                 self._requeue(req["id"], attempts=req["attempts"] - 1, message=f"pausiert: {exc}"[:500])
                 self.db.query("UPDATE curriculum.topic_requests SET next_attempt_at=now() + interval '10 minutes' "
@@ -313,6 +323,13 @@ class CurriculumAgent:
                                               row["attempts"], exc)
                 self.log(f"⏸ Lektion #{row['id']} wartet auf das Kontingent: {exc}")
                 return False
+            except ProviderPending as exc:
+                wait_s = int(exc.wait_seconds) if exc.wait_seconds is not None else 300
+                self.db.query("""UPDATE curriculum.lesson_exports SET status='queued', attempts=attempts-1,
+                                   message=%s, next_attempt_at=now() + make_interval(secs => %s)
+                                 WHERE id=%s AND status='running'""",
+                              (f"wartet: {exc}"[:500], wait_s, row["id"]))
+                self.log(f"⏳ Lektion #{row['id']} wartet auf den Anbieter: {exc}")
             except BudgetExhausted as exc:
                 self.db.query("""UPDATE curriculum.lesson_exports SET status='queued', attempts=attempts-1,
                                    message=%s, next_attempt_at=now() + interval '10 minutes'
@@ -348,6 +365,9 @@ class CurriculumAgent:
                                   message=self._last_findings(f"EXP-{row['id']}") if st == "blocked" else None,
                                   only_from=("running",))
             self.log(f"   {'✅' if st == 'ready' else '⛔'} Lektion #{row['id']}: {st}")
+        except ProviderPending:
+            status = "deferred"
+            raise
         except BudgetExhausted:
             status = "budget_exhausted"
             raise
@@ -391,6 +411,9 @@ class CurriculumAgent:
             with self.db.subject_lock(team.code, stop=self.stop,
                                       on_wait=lambda: self.log(f"   … wartet: {team.name} wird gerade bearbeitet")):
                 self._handle_locked(req, team, pipe, tasks)
+        except ProviderPending:
+            status = "deferred"
+            raise
         except BudgetExhausted:
             status = "budget_exhausted"
             raise
@@ -459,6 +482,8 @@ class CurriculumAgent:
                 block = self.db.one("SELECT * FROM curriculum.topic_blocks WHERE id=%s", (bid,))
                 try:
                     pipe.critic_round(code, block, 1, set(ids), rework_ids=fresh & set(approved))
+                except (BudgetExhausted, ProviderPending):
+                    raise   # Zurückstellen ist kein Kritiker-Fehler — nicht in die Fehlerwarteschlange
                 except Exception as exc:  # noqa: BLE001
                     self.log(f"   ⚠ Kritiker: {exc}")
                     self.db.enqueue_human("block", bid, "critic", str(exc)[:1000], kind="error")

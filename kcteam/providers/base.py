@@ -21,6 +21,22 @@ class ProviderError(RuntimeError):
         self.retry_after = retry_after
 
 
+class ProviderPending(Exception):
+    """Der Anbieter arbeitet noch — der Auftrag wird zurückgestellt, nicht wiederholt.
+
+    Asynchrone Anbieter (Devin) geben sofort eine Session-Kennung zurück und
+    liefern das Ergebnis erst Minuten später. Diese Ausnahme ist kein Fehler:
+    sie verbraucht keinen Auftragsversuch, sondern sagt dem Worker „lege den
+    Auftrag zurück und frag mich in `wait_seconds` wieder". Beim nächsten Lauf
+    findet derselbe Aufruf seine Session über den gespeicherten Schlüssel wieder.
+    """
+
+    def __init__(self, msg: str, *, wait_seconds: float | None = None, session_id: str | None = None):
+        super().__init__(msg)
+        self.wait_seconds = wait_seconds
+        self.session_id = session_id
+
+
 @dataclass
 class Completion:
     text: str

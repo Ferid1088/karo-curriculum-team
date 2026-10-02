@@ -25,6 +25,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any, Callable
 
 from .agents import AgentFailed, AgentRunner, BudgetExhausted
+from .providers.base import ProviderPending
 from .integrator import check_calibration, check_diagnostics, check_graph, check_visuals
 from .schemas import (Calibration, ConceptDraft, ConceptGraph, CriticReport, CurriculumMap, Diagnostics,
                       Finding, InspectorVerdict, VisualSet)
@@ -131,6 +132,8 @@ class Pipeline:
                  team=None):
         self.cfg, self.db, self.run_id, self.log = cfg, db, run_id, log
         self.team = team
+        if hasattr(provider, "bind_db"):
+            provider.bind_db(db)   # asynchrone Anbieter (Devin) halten ihre Sessions in der Datenbank
         self.agents = AgentRunner(cfg=cfg, provider=provider, db=db, run_id=run_id, karo_spec=karo_spec, team=team)
         self.stats: Counter = Counter()
         self._lock = threading.Lock()
@@ -163,8 +166,15 @@ class Pipeline:
             return
         futures = {self.pool.submit(fn, it): it["id"] for it in items}
         try:
+            pending = None
             for fut in as_completed(futures):
                 exc = fut.exception()
+                if isinstance(exc, ProviderPending):
+                    # Der Anbieter arbeitet noch. Andere Konzepte duerfen
+                    # zu Ende laufen — ihre Fortschritte sind gespeichert —
+                    # dann wird der ganze Auftrag zurueckgestellt.
+                    pending = pending or exc
+                    continue
                 if isinstance(exc, BudgetExhausted):
                     raise exc
                 if exc:
@@ -173,6 +183,8 @@ class Pipeline:
                     self._stat("errors")
                     self.log(f"   ⚠ {cid}: {exc}")
                     self.db.enqueue_human("concept", cid, st, str(exc)[:1000], kind="error")
+            if pending:
+                raise pending
         except BaseException:
             self.agents.stop.set()
             for f in futures:
@@ -405,7 +417,7 @@ class Pipeline:
             if set(states) <= {"approved", "blocked"}:
                 self.db.set_block_status(bid, "done")
             self.log(f"✓ {bid}: " + ", ".join(f"{k}={v}" for k, v in sorted(states.items())))
-        except BudgetExhausted:
+        except (BudgetExhausted, ProviderPending):
             raise
         except Exception as exc:  # noqa: BLE001 – ein Block darf den Lauf nicht beenden
             stage = getattr(exc, "stage", None) or "graph"

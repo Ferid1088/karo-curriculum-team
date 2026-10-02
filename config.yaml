@@ -2,7 +2,8 @@
 # Werte in ${VAR} werden aus Umgebungsvariablen (.env) gelesen.
 
 # Welcher KI-Zugang benutzt wird. Beim interaktiven Start kann man ihn auch wählen.
-# Möglich: claude_token | anthropic_api | openrouter | openai | mock
+# Möglich: claude_token | anthropic_api | openrouter | openai | devin | mock
+# KCTEAM_AI_PROVIDER (Umgebung) hat Vorrang vor dieser Zeile.
 provider: ${KCTEAM_PROVIDER:-claude_token}
 
 providers:
@@ -25,6 +26,17 @@ providers:
   openai:
     default_model: gpt-5-codex
     web_search: true
+  # Devin API (DEVIN_API_KEY) – asynchron: ein Modellaufruf ist eine Devin-
+  # Session; das Ergebnis holt der nächste Worker-Lauf als structured_output.
+  # Ein Auftrag wartet dazwischen in der Warteschlange (kein Versuch verbraucht).
+  devin:
+    default_model: devin              # Devin waehlt sein Modell selbst; nur Kennung fuer Logs
+    base_url: https://api.devin.ai/v1
+    poll_seconds: 300                 # so früh fragt der Worker die Session erneut ab
+    max_session_seconds: 7200         # danach wird die Session aufgegeben
+    timeout_s: 60                     # HTTP-Timeout fuer create/status/message
+    max_session_restarts: 1           # abgelaufene/fehlgeschlagene Session neu starten
+    # max_acu_limit: 20               # optionaler Kostenrahmen pro Devin-Session
   # Offline-Testmodus ohne KI-Kosten
   mock:
     default_model: mock

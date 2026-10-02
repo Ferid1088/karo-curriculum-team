@@ -64,7 +64,7 @@ def load_config(path: str | os.PathLike | None = None) -> Config:
     raw = _expand(yaml.safe_load(cfg_path.read_text(encoding="utf-8")) or {})
     return Config(
         raw=raw,
-        provider=raw.get("provider") or "claude_token",
+        provider=os.environ.get("KCTEAM_AI_PROVIDER") or raw.get("provider") or "claude_token",
         database_url=(raw.get("database") or {}).get("url", ""),
         karo_spec_path=raw.get("karo_spec_path", "/karo"),
         karo_spec_max_chars=int(raw.get("karo_spec_max_chars", 12000)),
