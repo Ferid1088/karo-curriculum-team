@@ -346,6 +346,18 @@ def create_app(db: DB | None = None, webhooks: bool = False) -> FastAPI:
                 "git_sha": version.GIT_SHA,
                 "formats": list(lessons.SUPPORTED_FORMATS)}
 
+    @app.get("/v1/gap-report")
+    def gap_report(c: dict = Depends(client)):
+        """Der Curriculum-Lückenbericht: fehlende Voraussetzungen, Kreise,
+        Konzepte ohne Level-0-Fuß, fehlende Kalibrierung, Diagnose,
+        Fehlvorstellungen, visuelle oder verfasste Lektionen.
+
+        `summary.ok` ist genau dann wahr, wenn keine Lücke gefunden wurde —
+        derselbe Befund wie `kcteam gap-report`.
+        """
+        from .gap_report import curriculum_gap_report
+        return curriculum_gap_report(get_db())
+
     @app.post("/v1/explanations/feedback")
     def explanation_feedback(body: WirkungIn, c: dict = Depends(client)):
         """Der Abnehmer meldet, welche Erklaerung bei ihm nicht wirkt.

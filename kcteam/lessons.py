@@ -14,7 +14,7 @@ from __future__ import annotations
 #: Auftrag ueber /v1/meta und stellt zurueck statt abzulehnen, wenn die
 #: Fassungen auseinanderlaufen — ein Versionsunterschied hat schon einmal
 #: jedes Thema dauerhaft unlieferbar gemacht.
-CONTRACT_VERSION = "karo-adaptiv-v1.4"
+CONTRACT_VERSION = "karo-adaptiv-v1.5"
 
 #: Formate, fuer die dieser Dienst eine eigene Pruefung mitbringt. Fuer alles
 #: andere bleibt er abnehmerneutral: er liefert aus, prueft aber nicht gegen
@@ -553,6 +553,10 @@ def grounding(db, concept_id: str, grade: int, topic: str | None) -> dict:
                                 "loesung": it["solution"]}
                                for it in items if it["kind"] in ("anchor", "diagnostic", "exit")][:10],
         "voraussetzungen": [p["title"] for p in pre],
+        # Kuratierte Slices bringen ihre Lektion fertig mit (Vertrag 1.5).
+        # Der Autor bekommt sie als verbindlichen Entwurf — der Mock gibt sie
+        # unveraendert aus, ein schreibendes Modell haelt sich daran.
+        "lektion_entwurf": c.get("lesson_draft"),
     }
 
 

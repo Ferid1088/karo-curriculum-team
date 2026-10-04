@@ -65,6 +65,57 @@ def test_real_consumer_format_roundtrip(env, tmp_path, monkeypatch):
     assert env["prov"].calls == before
 
 
+def test_inhaltsbestellung_laeuft_ende_zu_ende(env, tmp_path, monkeypatch):
+    """Der Luecken-Weg, nicht der Themen-Weg: Karo meldet, was fehlt, der
+    Dienst baut es aus dem kuratierten Entwurf, Karo holt es ab.
+
+    requested -> queued -> ready -> imported -> fulfilled — und die
+    naechste Lernrunde unterrichtet genau das gelieferte Konzept.
+    """
+    bridge, calls = karo(env, tmp_path, monkeypatch)
+    from app import config
+    from app.adaptiv import store, unterricht
+    from kcteam import slices as kc_slices
+    kc_slices.seed_slices(env["db"])
+
+    zeile = store.inhalt_anfordern(
+        "biologie", "BI.PFLANZEN.FOTOSYNTHESE", "lektion", "fehlt",
+        kontext={"titel": "Fotosynthese", "klasse": 6})
+    assert zeile["status"] == "offen"
+
+    cfg = config.load()
+    # Erster Lauf: Bestellung raus, Auftragsnummer verknuepft.
+    assert bridge.anfragen_bedienen(cfg) == {"bedient": 0}
+    auftrag = store.inhalt_anfragen("offen")[0]
+    assert auftrag["external_ref"], "die Dienst-Nummer fehlt"
+    gebucht = [b for m, p, b in calls if p == "/v1/lessons"]
+    assert gebucht and gebucht[0]["concept_id"] == "BI.PFLANZEN.FOTOSYNTHESE"
+    assert gebucht[0]["request_reason"] == "fehlt"
+
+    # Der Dienst arbeitet; Karo holt ab, wenn fertig.
+    while env["agent"].process_export():
+        pass
+    assert bridge.anfragen_bedienen(cfg) == {"bedient": 1}
+
+    erfuellt = store.inhalt_anfragen("erfuellt")
+    assert len(erfuellt) == 1 and erfuellt[0]["konzept_id"], erfuellt
+    assert not any(p.endswith("/reject") for _, p, _ in calls)
+
+    konzept = store.konzept(erfuellt[0]["konzept_id"])
+    assert konzept["quelle"] == "curriculum" and konzept["fach"] == "biologie"
+    # Die naechste Lernrunde benutzt die Lieferung direkt — Anker steht.
+    sitzung = unterricht.starte(konzept["id"], "Fotosynthese")
+    assert unterricht.bildschirm(sitzung)["art"] == "anker"
+    # … und kennt ihre Voraussetzungen (Umweg im selben Thema moeglich).
+    voraus = store.voraussetzungen(konzept["id"])
+    assert {v["voraussetzung"] for v in voraus} >= {
+        "BI.PFLANZEN.BEDUERFNISSE", "BI.PFLANZEN.AUFBAU"}
+
+    # Idempotent: ein zweiter Lauf bestellt nichts erneut.
+    assert bridge.anfragen_bedienen(cfg) == {"bedient": 0}
+    assert not store.inhalt_anfragen("offen")
+
+
 def test_a_version_gap_defers_and_never_rejects(env, tmp_path, monkeypatch):
     """Beide Seiten absichtlich auf verschiedenen Vertragsfassungen.
 

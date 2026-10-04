@@ -283,6 +283,11 @@ class MockProvider(Provider):
         p = meta.get("payload", {})
         schema = meta.get("json_schema") or {}
         fb = meta.get("feedback") or ""
+        # Kuratiertes Konzept (Vertrag 1.5): die Lektion ist schon verfasst.
+        # Der Mock liefert sie unveraendert — geprueft wird sie danach
+        # genauso wie jede generierte Lektion.
+        if isinstance(p.get("lektion_entwurf"), dict):
+            return p["lektion_entwurf"]
         if "fehlertypen" not in (schema.get("properties") or {}):
             return _fill(schema)
         k = p["konzept"]

@@ -1,808 +1,1093 @@
 {
- "id": "karo-adaptiv-v1",
- "schema": {
-  "type": "object",
-  "properties": {
-   "konzept": {
+  "id": "karo-adaptiv-v1",
+  "schema": {
     "type": "object",
     "properties": {
-     "konzept_key": {
-      "type": "string",
-      "description": "kurz, klein, mit Bindestrich"
-     },
-     "thema_key": {
-      "type": "string",
-      "description": "das Gebiet, z. B. geometrie"
-     },
-     "label": {
-      "type": "string"
-     },
-     "klasse_von": {
-      "type": "integer"
-     },
-     "klasse_bis": {
-      "type": "integer"
-     },
-     "stichworte": {
-      "type": "array",
-      "maxItems": 6,
-      "items": {
-       "type": "string"
+      "konzept": {
+        "type": "object",
+        "properties": {
+          "konzept_key": {
+            "type": "string",
+            "description": "kurz, klein, mit Bindestrich"
+          },
+          "thema_key": {
+            "type": "string",
+            "description": "das Gebiet, z. B. geometrie"
+          },
+          "label": {
+            "type": "string"
+          },
+          "klasse_von": {
+            "type": "integer"
+          },
+          "klasse_bis": {
+            "type": "integer"
+          },
+          "stichworte": {
+            "type": "array",
+            "maxItems": 6,
+            "items": {
+              "type": "string"
+            },
+            "description": "Wonach ein Kind suchen könnte. Sie benennen DIESES Konzept, nicht das ganze Gebiet: „brueche“ träfe auch das Kürzen."
+          }
+        },
+        "required": [
+          "konzept_key",
+          "thema_key",
+          "label",
+          "klasse_von",
+          "klasse_bis",
+          "stichworte"
+        ]
       },
-      "description": "Wonach ein Kind suchen könnte. Sie benennen DIESES Konzept, nicht das ganze Gebiet: „brueche“ träfe auch das Kürzen."
-     }
-    },
-    "required": [
-     "konzept_key",
-     "thema_key",
-     "label",
-     "klasse_von",
-     "klasse_bis",
-     "stichworte"
-    ]
-   },
-   "erstkontakt": {
-    "type": "object",
-    "properties": {
-     "anker": {
-      "type": "string",
-      "description": "Eine Alltagsfrage, die das Kind schon beantworten kann"
-     },
-     "erste_aufgabe": {
-      "type": "object",
-      "properties": {
-       "frage": {
-        "type": "string"
-       },
-       "loesung": {
-        "type": "string"
-       },
-       "tipps": {
+      "erstkontakt": {
+        "type": "object",
+        "properties": {
+          "anker": {
+            "type": "string",
+            "description": "Eine Alltagsfrage, die das Kind schon beantworten kann"
+          },
+          "erste_aufgabe": {
+            "type": "object",
+            "properties": {
+              "frage": {
+                "type": "string"
+              },
+              "loesung": {
+                "type": "string"
+              },
+              "vorlage": {
+                "type": "object",
+                "description": "Bei Rechenaufgaben STATT frage/loesung: eine Vorlage mit Platzhaltern. Karo würfelt die Zahlen und rechnet die Lösung selbst aus.",
+                "properties": {
+                  "vorlage": {
+                    "type": "string",
+                    "description": "Rechenausdruck mit Platzhaltern, z. B. „{a}/{b} + {c}/{d}“"
+                  },
+                  "frage": {
+                    "type": "string",
+                    "description": "Der Satz drumherum, mit {aufgabe} als Platz für den Ausdruck"
+                  },
+                  "bedingungen": {
+                    "type": "array",
+                    "maxItems": 8,
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "Was für die Zahlen gelten muss, z. B. „b != d“, „a < b“, „kgv(b,d) <= 24“. Erlaubt sind + - * / % ( ) < > == != and or sowie kgv, ggt, abs, min, max."
+                  },
+                  "bereich": {
+                    "type": "array",
+                    "maxItems": 2,
+                    "items": {
+                      "type": "integer"
+                    },
+                    "description": "Von/bis für die Zahlen, Standard 1 bis 12"
+                  }
+                },
+                "required": [
+                  "vorlage"
+                ]
+              },
+              "tipps": {
+                "type": "array",
+                "maxItems": 3,
+                "items": {
+                  "type": "string"
+                },
+                "description": "Hinweise, die zum Denken führen, nicht zur Lösung"
+              }
+            },
+            "required": [
+              "frage",
+              "loesung"
+            ]
+          },
+          "benennung": {
+            "type": "string",
+            "description": "Der Fachbegriff — zuletzt"
+          }
+        },
+        "required": [
+          "anker",
+          "erste_aufgabe",
+          "benennung"
+        ]
+      },
+      "fehlertypen": {
         "type": "array",
-        "maxItems": 3,
+        "minItems": 2,
+        "maxItems": 4,
+        "description": "Die Fehlvorstellungen, die Kinder bei diesem Konzept wirklich haben — nicht Themen.",
         "items": {
-         "type": "string"
-        },
-        "description": "Hinweise, die zum Denken führen, nicht zur Lösung"
-       }
+          "type": "object",
+          "properties": {
+            "key": {
+              "type": "string"
+            },
+            "label": {
+              "type": "string"
+            },
+            "beschreibung": {
+              "type": "string"
+            },
+            "antworten": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 6,
+              "items": {
+                "type": "string"
+              },
+              "description": "Falsche Antworten, an denen genau diese Fehlvorstellung zu erkennen ist"
+            },
+            "erklaerung": {
+              "type": "object",
+              "properties": {
+                "haken": {
+                  "type": "string"
+                },
+                "erkenntnis": {
+                  "type": "string"
+                },
+                "regel": {
+                  "type": "string"
+                },
+                "bild": {
+                  "type": "object",
+                  "properties": {
+                    "zeigt": {
+                      "type": "string"
+                    },
+                    "bewegt": {
+                      "type": "string"
+                    },
+                    "bleibt_gleich": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "zeigt",
+                    "bewegt",
+                    "bleibt_gleich"
+                  ]
+                },
+                "aufgabe": {
+                  "type": "object",
+                  "properties": {
+                    "frage": {
+                      "type": "string"
+                    },
+                    "loesung": {
+                      "type": "string"
+                    },
+                    "vorlage": {
+                      "type": "object",
+                      "description": "Bei Rechenaufgaben STATT frage/loesung: eine Vorlage mit Platzhaltern. Karo würfelt die Zahlen und rechnet die Lösung selbst aus.",
+                      "properties": {
+                        "vorlage": {
+                          "type": "string",
+                          "description": "Rechenausdruck mit Platzhaltern, z. B. „{a}/{b} + {c}/{d}“"
+                        },
+                        "frage": {
+                          "type": "string",
+                          "description": "Der Satz drumherum, mit {aufgabe} als Platz für den Ausdruck"
+                        },
+                        "bedingungen": {
+                          "type": "array",
+                          "maxItems": 8,
+                          "items": {
+                            "type": "string"
+                          },
+                          "description": "Was für die Zahlen gelten muss, z. B. „b != d“, „a < b“, „kgv(b,d) <= 24“. Erlaubt sind + - * / % ( ) < > == != and or sowie kgv, ggt, abs, min, max."
+                        },
+                        "bereich": {
+                          "type": "array",
+                          "maxItems": 2,
+                          "items": {
+                            "type": "integer"
+                          },
+                          "description": "Von/bis für die Zahlen, Standard 1 bis 12"
+                        }
+                      },
+                      "required": [
+                        "vorlage"
+                      ]
+                    },
+                    "tipps": {
+                      "type": "array",
+                      "maxItems": 3,
+                      "items": {
+                        "type": "string"
+                      },
+                      "description": "Hinweise, die zum Denken führen, nicht zur Lösung"
+                    }
+                  },
+                  "required": [
+                    "frage",
+                    "loesung"
+                  ]
+                }
+              },
+              "required": [
+                "haken",
+                "erkenntnis",
+                "regel",
+                "bild",
+                "aufgabe"
+              ]
+            },
+            "visualisierung": {
+              "type": "object",
+              "properties": {
+                "component": {
+                  "type": "string",
+                  "description": "Eine Id aus der Liste im Auftrag"
+                },
+                "parameters": {
+                  "type": "object",
+                  "description": "Genau die Parameter dieser Komponente"
+                },
+                "animation": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "component",
+                "parameters",
+                "animation"
+              ]
+            },
+            "visualisierung_alternativ": {
+              "type": "object",
+              "properties": {
+                "component": {
+                  "type": "string",
+                  "description": "Eine Id aus der Liste im Auftrag"
+                },
+                "parameters": {
+                  "type": "object",
+                  "description": "Genau die Parameter dieser Komponente"
+                },
+                "animation": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "component",
+                "parameters",
+                "animation"
+              ]
+            },
+            "aufgaben": {
+              "type": "object",
+              "properties": {
+                "vorhersage": {
+                  "type": "object",
+                  "properties": {
+                    "frage": {
+                      "type": "string"
+                    },
+                    "loesung": {
+                      "type": "string"
+                    },
+                    "vorlage": {
+                      "type": "object",
+                      "description": "Bei Rechenaufgaben STATT frage/loesung: eine Vorlage mit Platzhaltern. Karo würfelt die Zahlen und rechnet die Lösung selbst aus.",
+                      "properties": {
+                        "vorlage": {
+                          "type": "string",
+                          "description": "Rechenausdruck mit Platzhaltern, z. B. „{a}/{b} + {c}/{d}“"
+                        },
+                        "frage": {
+                          "type": "string",
+                          "description": "Der Satz drumherum, mit {aufgabe} als Platz für den Ausdruck"
+                        },
+                        "bedingungen": {
+                          "type": "array",
+                          "maxItems": 8,
+                          "items": {
+                            "type": "string"
+                          },
+                          "description": "Was für die Zahlen gelten muss, z. B. „b != d“, „a < b“, „kgv(b,d) <= 24“. Erlaubt sind + - * / % ( ) < > == != and or sowie kgv, ggt, abs, min, max."
+                        },
+                        "bereich": {
+                          "type": "array",
+                          "maxItems": 2,
+                          "items": {
+                            "type": "integer"
+                          },
+                          "description": "Von/bis für die Zahlen, Standard 1 bis 12"
+                        }
+                      },
+                      "required": [
+                        "vorlage"
+                      ]
+                    },
+                    "tipps": {
+                      "type": "array",
+                      "maxItems": 3,
+                      "items": {
+                        "type": "string"
+                      },
+                      "description": "Hinweise, die zum Denken führen, nicht zur Lösung"
+                    },
+                    "optionen": {
+                      "type": "array",
+                      "minItems": 2,
+                      "maxItems": 4,
+                      "items": {
+                        "type": "string"
+                      },
+                      "description": "Die Auswahl. Die Lösung muss darunter stehen."
+                    },
+                    "aufloesung": {
+                      "type": "string",
+                      "description": "Ein Satz, warum die richtige Auswahl stimmt"
+                    }
+                  },
+                  "required": [
+                    "frage",
+                    "loesung",
+                    "optionen",
+                    "aufloesung"
+                  ]
+                },
+                "beispiel": {
+                  "type": "object",
+                  "properties": {
+                    "frage": {
+                      "type": "string"
+                    },
+                    "loesung": {
+                      "type": "string"
+                    },
+                    "vorlage": {
+                      "type": "object",
+                      "description": "Bei Rechenaufgaben STATT frage/loesung: eine Vorlage mit Platzhaltern. Karo würfelt die Zahlen und rechnet die Lösung selbst aus.",
+                      "properties": {
+                        "vorlage": {
+                          "type": "string",
+                          "description": "Rechenausdruck mit Platzhaltern, z. B. „{a}/{b} + {c}/{d}“"
+                        },
+                        "frage": {
+                          "type": "string",
+                          "description": "Der Satz drumherum, mit {aufgabe} als Platz für den Ausdruck"
+                        },
+                        "bedingungen": {
+                          "type": "array",
+                          "maxItems": 8,
+                          "items": {
+                            "type": "string"
+                          },
+                          "description": "Was für die Zahlen gelten muss, z. B. „b != d“, „a < b“, „kgv(b,d) <= 24“. Erlaubt sind + - * / % ( ) < > == != and or sowie kgv, ggt, abs, min, max."
+                        },
+                        "bereich": {
+                          "type": "array",
+                          "maxItems": 2,
+                          "items": {
+                            "type": "integer"
+                          },
+                          "description": "Von/bis für die Zahlen, Standard 1 bis 12"
+                        }
+                      },
+                      "required": [
+                        "vorlage"
+                      ]
+                    },
+                    "tipps": {
+                      "type": "array",
+                      "maxItems": 3,
+                      "items": {
+                        "type": "string"
+                      },
+                      "description": "Hinweise, die zum Denken führen, nicht zur Lösung"
+                    }
+                  },
+                  "required": [
+                    "frage",
+                    "loesung"
+                  ]
+                },
+                "gefuehrt": {
+                  "type": "object",
+                  "properties": {
+                    "frage": {
+                      "type": "string"
+                    },
+                    "loesung": {
+                      "type": "string"
+                    },
+                    "vorlage": {
+                      "type": "object",
+                      "description": "Bei Rechenaufgaben STATT frage/loesung: eine Vorlage mit Platzhaltern. Karo würfelt die Zahlen und rechnet die Lösung selbst aus.",
+                      "properties": {
+                        "vorlage": {
+                          "type": "string",
+                          "description": "Rechenausdruck mit Platzhaltern, z. B. „{a}/{b} + {c}/{d}“"
+                        },
+                        "frage": {
+                          "type": "string",
+                          "description": "Der Satz drumherum, mit {aufgabe} als Platz für den Ausdruck"
+                        },
+                        "bedingungen": {
+                          "type": "array",
+                          "maxItems": 8,
+                          "items": {
+                            "type": "string"
+                          },
+                          "description": "Was für die Zahlen gelten muss, z. B. „b != d“, „a < b“, „kgv(b,d) <= 24“. Erlaubt sind + - * / % ( ) < > == != and or sowie kgv, ggt, abs, min, max."
+                        },
+                        "bereich": {
+                          "type": "array",
+                          "maxItems": 2,
+                          "items": {
+                            "type": "integer"
+                          },
+                          "description": "Von/bis für die Zahlen, Standard 1 bis 12"
+                        }
+                      },
+                      "required": [
+                        "vorlage"
+                      ]
+                    },
+                    "tipps": {
+                      "type": "array",
+                      "maxItems": 3,
+                      "items": {
+                        "type": "string"
+                      },
+                      "description": "Hinweise, die zum Denken führen, nicht zur Lösung"
+                    },
+                    "typischer_fehler": {
+                      "type": "string",
+                      "description": "Was GENAU diese Fehlvorstellung bei GENAU dieser Aufgabe ergibt. Nicht die Lösung. Daran erkennt Karo später dieselbe Fehlvorstellung wieder."
+                    }
+                  },
+                  "required": [
+                    "frage",
+                    "loesung",
+                    "typischer_fehler"
+                  ]
+                },
+                "selbststaendig": {
+                  "type": "object",
+                  "properties": {
+                    "frage": {
+                      "type": "string"
+                    },
+                    "loesung": {
+                      "type": "string"
+                    },
+                    "vorlage": {
+                      "type": "object",
+                      "description": "Bei Rechenaufgaben STATT frage/loesung: eine Vorlage mit Platzhaltern. Karo würfelt die Zahlen und rechnet die Lösung selbst aus.",
+                      "properties": {
+                        "vorlage": {
+                          "type": "string",
+                          "description": "Rechenausdruck mit Platzhaltern, z. B. „{a}/{b} + {c}/{d}“"
+                        },
+                        "frage": {
+                          "type": "string",
+                          "description": "Der Satz drumherum, mit {aufgabe} als Platz für den Ausdruck"
+                        },
+                        "bedingungen": {
+                          "type": "array",
+                          "maxItems": 8,
+                          "items": {
+                            "type": "string"
+                          },
+                          "description": "Was für die Zahlen gelten muss, z. B. „b != d“, „a < b“, „kgv(b,d) <= 24“. Erlaubt sind + - * / % ( ) < > == != and or sowie kgv, ggt, abs, min, max."
+                        },
+                        "bereich": {
+                          "type": "array",
+                          "maxItems": 2,
+                          "items": {
+                            "type": "integer"
+                          },
+                          "description": "Von/bis für die Zahlen, Standard 1 bis 12"
+                        }
+                      },
+                      "required": [
+                        "vorlage"
+                      ]
+                    },
+                    "tipps": {
+                      "type": "array",
+                      "maxItems": 3,
+                      "items": {
+                        "type": "string"
+                      },
+                      "description": "Hinweise, die zum Denken führen, nicht zur Lösung"
+                    },
+                    "typischer_fehler": {
+                      "type": "string",
+                      "description": "Was GENAU diese Fehlvorstellung bei GENAU dieser Aufgabe ergibt. Nicht die Lösung. Daran erkennt Karo später dieselbe Fehlvorstellung wieder."
+                    }
+                  },
+                  "required": [
+                    "frage",
+                    "loesung",
+                    "typischer_fehler"
+                  ]
+                },
+                "transfer": {
+                  "type": "object",
+                  "properties": {
+                    "frage": {
+                      "type": "string"
+                    },
+                    "loesung": {
+                      "type": "string"
+                    },
+                    "vorlage": {
+                      "type": "object",
+                      "description": "Bei Rechenaufgaben STATT frage/loesung: eine Vorlage mit Platzhaltern. Karo würfelt die Zahlen und rechnet die Lösung selbst aus.",
+                      "properties": {
+                        "vorlage": {
+                          "type": "string",
+                          "description": "Rechenausdruck mit Platzhaltern, z. B. „{a}/{b} + {c}/{d}“"
+                        },
+                        "frage": {
+                          "type": "string",
+                          "description": "Der Satz drumherum, mit {aufgabe} als Platz für den Ausdruck"
+                        },
+                        "bedingungen": {
+                          "type": "array",
+                          "maxItems": 8,
+                          "items": {
+                            "type": "string"
+                          },
+                          "description": "Was für die Zahlen gelten muss, z. B. „b != d“, „a < b“, „kgv(b,d) <= 24“. Erlaubt sind + - * / % ( ) < > == != and or sowie kgv, ggt, abs, min, max."
+                        },
+                        "bereich": {
+                          "type": "array",
+                          "maxItems": 2,
+                          "items": {
+                            "type": "integer"
+                          },
+                          "description": "Von/bis für die Zahlen, Standard 1 bis 12"
+                        }
+                      },
+                      "required": [
+                        "vorlage"
+                      ]
+                    },
+                    "tipps": {
+                      "type": "array",
+                      "maxItems": 3,
+                      "items": {
+                        "type": "string"
+                      },
+                      "description": "Hinweise, die zum Denken führen, nicht zur Lösung"
+                    },
+                    "optionen": {
+                      "type": "array",
+                      "minItems": 2,
+                      "maxItems": 4,
+                      "items": {
+                        "type": "string"
+                      },
+                      "description": "Die Auswahl. Die Lösung muss darunter stehen."
+                    },
+                    "aufloesung": {
+                      "type": "string",
+                      "description": "Ein Satz, warum die richtige Auswahl stimmt"
+                    }
+                  },
+                  "required": [
+                    "frage",
+                    "loesung",
+                    "optionen",
+                    "aufloesung"
+                  ]
+                }
+              },
+              "required": [
+                "vorhersage",
+                "beispiel",
+                "gefuehrt",
+                "selbststaendig",
+                "transfer"
+              ]
+            }
+          },
+          "required": [
+            "key",
+            "label",
+            "beschreibung",
+            "antworten",
+            "erklaerung",
+            "visualisierung",
+            "aufgaben"
+          ]
+        }
       },
-      "required": [
-       "frage",
-       "loesung"
-      ]
-     },
-     "benennung": {
-      "type": "string",
-      "description": "Der Fachbegriff — zuletzt"
-     }
+      "hilfe": {
+        "type": "object",
+        "description": "Zweite Erklärung pro Phase: andere Worte als auf dem Schirm, auf Übungsschirmen nie die Lösung",
+        "properties": {
+          "HOOK": {
+            "type": "object",
+            "properties": {
+              "text": {
+                "type": "string"
+              },
+              "visualisierung": {
+                "type": "object",
+                "properties": {
+                  "component": {
+                    "type": "string",
+                    "description": "Eine Id aus der Liste im Auftrag"
+                  },
+                  "parameters": {
+                    "type": "object",
+                    "description": "Genau die Parameter dieser Komponente"
+                  },
+                  "animation": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "component",
+                  "parameters",
+                  "animation"
+                ]
+              }
+            },
+            "required": [
+              "text"
+            ]
+          },
+          "RULE": {
+            "type": "object",
+            "properties": {
+              "text": {
+                "type": "string"
+              },
+              "visualisierung": {
+                "type": "object",
+                "properties": {
+                  "component": {
+                    "type": "string",
+                    "description": "Eine Id aus der Liste im Auftrag"
+                  },
+                  "parameters": {
+                    "type": "object",
+                    "description": "Genau die Parameter dieser Komponente"
+                  },
+                  "animation": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "component",
+                  "parameters",
+                  "animation"
+                ]
+              }
+            },
+            "required": [
+              "text"
+            ]
+          },
+          "WORKED_EXAMPLE": {
+            "type": "object",
+            "properties": {
+              "text": {
+                "type": "string"
+              },
+              "visualisierung": {
+                "type": "object",
+                "properties": {
+                  "component": {
+                    "type": "string",
+                    "description": "Eine Id aus der Liste im Auftrag"
+                  },
+                  "parameters": {
+                    "type": "object",
+                    "description": "Genau die Parameter dieser Komponente"
+                  },
+                  "animation": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "component",
+                  "parameters",
+                  "animation"
+                ]
+              }
+            },
+            "required": [
+              "text"
+            ]
+          },
+          "GUIDED_TASK": {
+            "type": "object",
+            "properties": {
+              "text": {
+                "type": "string"
+              },
+              "visualisierung": {
+                "type": "object",
+                "properties": {
+                  "component": {
+                    "type": "string",
+                    "description": "Eine Id aus der Liste im Auftrag"
+                  },
+                  "parameters": {
+                    "type": "object",
+                    "description": "Genau die Parameter dieser Komponente"
+                  },
+                  "animation": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "component",
+                  "parameters",
+                  "animation"
+                ]
+              }
+            },
+            "required": [
+              "text"
+            ]
+          },
+          "INDEPENDENT_TASK": {
+            "type": "object",
+            "properties": {
+              "text": {
+                "type": "string"
+              },
+              "visualisierung": {
+                "type": "object",
+                "properties": {
+                  "component": {
+                    "type": "string",
+                    "description": "Eine Id aus der Liste im Auftrag"
+                  },
+                  "parameters": {
+                    "type": "object",
+                    "description": "Genau die Parameter dieser Komponente"
+                  },
+                  "animation": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "component",
+                  "parameters",
+                  "animation"
+                ]
+              }
+            },
+            "required": [
+              "text"
+            ]
+          },
+          "ADAPTATION": {
+            "type": "object",
+            "properties": {
+              "text": {
+                "type": "string"
+              },
+              "visualisierung": {
+                "type": "object",
+                "properties": {
+                  "component": {
+                    "type": "string",
+                    "description": "Eine Id aus der Liste im Auftrag"
+                  },
+                  "parameters": {
+                    "type": "object",
+                    "description": "Genau die Parameter dieser Komponente"
+                  },
+                  "animation": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "component",
+                  "parameters",
+                  "animation"
+                ]
+              }
+            },
+            "required": [
+              "text"
+            ]
+          }
+        },
+        "required": [
+          "HOOK",
+          "RULE",
+          "WORKED_EXAMPLE",
+          "GUIDED_TASK",
+          "INDEPENDENT_TASK",
+          "ADAPTATION"
+        ]
+      },
+      "faq": {
+        "type": "array",
+        "minItems": 2,
+        "maxItems": 5,
+        "description": "Kurze Antworten auf das, was Kinder bei diesem Konzept wirklich fragen",
+        "items": {
+          "type": "object",
+          "properties": {
+            "frage": {
+              "type": "string"
+            },
+            "antwort": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "frage",
+            "antwort"
+          ]
+        }
+      }
     },
     "required": [
-     "anker",
-     "erste_aufgabe",
-     "benennung"
+      "konzept",
+      "erstkontakt",
+      "fehlertypen",
+      "hilfe",
+      "faq"
     ]
-   },
-   "fehlertypen": {
-    "type": "array",
-    "minItems": 2,
-    "maxItems": 4,
-    "description": "Die Fehlvorstellungen, die Kinder bei diesem Konzept wirklich haben — nicht Themen.",
-    "items": {
-     "type": "object",
-     "properties": {
-      "key": {
-       "type": "string"
-      },
-      "label": {
-       "type": "string"
-      },
-      "beschreibung": {
-       "type": "string"
-      },
-      "antworten": {
-       "type": "array",
-       "minItems": 1,
-       "maxItems": 6,
-       "items": {
-        "type": "string"
-       },
-       "description": "Falsche Antworten, an denen genau diese Fehlvorstellung zu erkennen ist"
-      },
-      "erklaerung": {
-       "type": "object",
-       "properties": {
-        "haken": {
-         "type": "string"
+  },
+  "registry": [
+    {
+      "component": "FractionStrip",
+      "version": 1,
+      "zweck": "Zwei gleich breite Ganze, unterschiedlich geteilt — zeigt, dass sich beim Umrechnen die Stückzahl ändert, nicht die Menge.",
+      "parameter": {
+        "a": {
+          "typ": "bruch",
+          "zweck": "erster Bruch",
+          "pflicht": true,
+          "form": "[Zähler, Nenner]",
+          "beispiel": [
+            1,
+            2
+          ]
         },
-        "erkenntnis": {
-         "type": "string"
+        "b": {
+          "typ": "bruch",
+          "zweck": "zweiter Bruch",
+          "pflicht": false,
+          "form": "[Zähler, Nenner]",
+          "beispiel": [
+            1,
+            2
+          ]
         },
-        "regel": {
-         "type": "string"
-        },
-        "bild": {
-         "type": "object",
-         "properties": {
-          "zeigt": {
-           "type": "string"
-          },
-          "bewegt": {
-           "type": "string"
-          },
-          "bleibt_gleich": {
-           "type": "string"
-          }
-         },
-         "required": [
-          "zeigt",
-          "bewegt",
-          "bleibt_gleich"
-         ]
-        },
-        "aufgabe": {
-         "type": "object",
-         "properties": {
-          "frage": {
-           "type": "string"
-          },
-          "loesung": {
-           "type": "string"
-          },
-          "tipps": {
-           "type": "array",
-           "maxItems": 3,
-           "items": {
-            "type": "string"
-           },
-           "description": "Hinweise, die zum Denken führen, nicht zur Lösung"
-          }
-         },
-         "required": [
-          "frage",
-          "loesung"
-         ]
+        "gemeinsam": {
+          "typ": "ganzzahl",
+          "min": 1,
+          "zweck": "gemeinsamer Nenner, auf den umgerechnet wird",
+          "pflicht": false,
+          "form": "ganze Zahl",
+          "beispiel": 3
         }
-       },
-       "required": [
-        "haken",
-        "erkenntnis",
-        "regel",
-        "bild",
-        "aufgabe"
-       ]
       },
-      "visualisierung": {
-       "type": "object",
-       "properties": {
-        "component": {
-         "type": "string",
-         "description": "Eine Id aus der Liste im Auftrag"
+      "animationen": [
+        "none",
+        "cut_then_slide"
+      ]
+    },
+    {
+      "component": "NumberLine",
+      "version": 1,
+      "zweck": "Brüche als Orte auf einer Linie — zeigt Größenverhältnisse, wo Streifen schon einmal nicht geholfen haben.",
+      "parameter": {
+        "marken": {
+          "typ": "liste[bruch]",
+          "zweck": "Brüche, die markiert werden",
+          "pflicht": true,
+          "form": "Liste von [Zähler, Nenner]",
+          "beispiel": [
+            [
+              1,
+              2
+            ],
+            [
+              1,
+              3
+            ]
+          ]
         },
-        "parameters": {
-         "type": "object",
-         "description": "Genau die Parameter dieser Komponente"
+        "bis": {
+          "typ": "bruch",
+          "zweck": "rechtes Ende der Linie",
+          "pflicht": false,
+          "form": "[Zähler, Nenner]",
+          "beispiel": [
+            1,
+            2
+          ]
         },
-        "animation": {
-         "type": "string"
+        "schritte": {
+          "typ": "ganzzahl",
+          "min": 1,
+          "zweck": "Teilstriche",
+          "pflicht": false,
+          "form": "ganze Zahl",
+          "beispiel": 3
         }
-       },
-       "required": [
-        "component",
-        "parameters",
-        "animation"
-       ]
       },
-      "visualisierung_alternativ": {
-       "type": "object",
-       "properties": {
-        "component": {
-         "type": "string",
-         "description": "Eine Id aus der Liste im Auftrag"
+      "animationen": [
+        "none",
+        "walk"
+      ]
+    },
+    {
+      "component": "AreaModel",
+      "version": 1,
+      "zweck": "Ein Rechteck in Zeilen und Spalten — für Anteile und später für das Multiplizieren von Brüchen.",
+      "parameter": {
+        "spalten": {
+          "typ": "ganzzahl",
+          "min": 1,
+          "max": 20,
+          "pflicht": true,
+          "form": "ganze Zahl",
+          "beispiel": 3
         },
-        "parameters": {
-         "type": "object",
-         "description": "Genau die Parameter dieser Komponente"
+        "zeilen": {
+          "typ": "ganzzahl",
+          "min": 1,
+          "max": 20,
+          "pflicht": true,
+          "form": "ganze Zahl",
+          "beispiel": 3
         },
-        "animation": {
-         "type": "string"
+        "markiert": {
+          "typ": "ganzzahl",
+          "min": 0,
+          "zweck": "wie viele Felder gefüllt sind",
+          "pflicht": false,
+          "form": "ganze Zahl",
+          "beispiel": 3
         }
-       },
-       "required": [
-        "component",
-        "parameters",
-        "animation"
-       ]
       },
-      "aufgaben": {
-       "type": "object",
-       "properties": {
-        "vorhersage": {
-         "type": "object",
-         "properties": {
-          "frage": {
-           "type": "string"
-          },
-          "loesung": {
-           "type": "string"
-          },
-          "tipps": {
-           "type": "array",
-           "maxItems": 3,
-           "items": {
-            "type": "string"
-           },
-           "description": "Hinweise, die zum Denken führen, nicht zur Lösung"
-          },
-          "optionen": {
-           "type": "array",
-           "minItems": 2,
-           "maxItems": 4,
-           "items": {
-            "type": "string"
-           },
-           "description": "Die Auswahl. Die Lösung muss darunter stehen."
-          },
-          "aufloesung": {
-           "type": "string",
-           "description": "Ein Satz, warum die richtige Auswahl stimmt"
-          }
-         },
-         "required": [
-          "frage",
-          "loesung",
-          "optionen",
-          "aufloesung"
-         ]
+      "animationen": [
+        "none",
+        "split"
+      ]
+    },
+    {
+      "component": "Balance",
+      "version": 1,
+      "zweck": "Eine Waage — für Gleichungen und Vergleiche, bei denen es um „gleich viel“ geht, nicht um Anteile.",
+      "parameter": {
+        "links": {
+          "typ": "bruch",
+          "pflicht": true,
+          "form": "[Zähler, Nenner]",
+          "beispiel": [
+            1,
+            2
+          ]
         },
-        "beispiel": {
-         "type": "object",
-         "properties": {
-          "frage": {
-           "type": "string"
-          },
-          "loesung": {
-           "type": "string"
-          },
-          "tipps": {
-           "type": "array",
-           "maxItems": 3,
-           "items": {
-            "type": "string"
-           },
-           "description": "Hinweise, die zum Denken führen, nicht zur Lösung"
-          }
-         },
-         "required": [
-          "frage",
-          "loesung"
-         ]
-        },
-        "gefuehrt": {
-         "type": "object",
-         "properties": {
-          "frage": {
-           "type": "string"
-          },
-          "loesung": {
-           "type": "string"
-          },
-          "tipps": {
-           "type": "array",
-           "maxItems": 3,
-           "items": {
-            "type": "string"
-           },
-           "description": "Hinweise, die zum Denken führen, nicht zur Lösung"
-          },
-          "typischer_fehler": {
-           "type": "string",
-           "description": "Was GENAU diese Fehlvorstellung bei GENAU dieser Aufgabe ergibt. Nicht die Lösung. Daran erkennt Karo später dieselbe Fehlvorstellung wieder."
-          }
-         },
-         "required": [
-          "frage",
-          "loesung",
-          "typischer_fehler"
-         ]
-        },
-        "selbststaendig": {
-         "type": "object",
-         "properties": {
-          "frage": {
-           "type": "string"
-          },
-          "loesung": {
-           "type": "string"
-          },
-          "tipps": {
-           "type": "array",
-           "maxItems": 3,
-           "items": {
-            "type": "string"
-           },
-           "description": "Hinweise, die zum Denken führen, nicht zur Lösung"
-          },
-          "typischer_fehler": {
-           "type": "string",
-           "description": "Was GENAU diese Fehlvorstellung bei GENAU dieser Aufgabe ergibt. Nicht die Lösung. Daran erkennt Karo später dieselbe Fehlvorstellung wieder."
-          }
-         },
-         "required": [
-          "frage",
-          "loesung",
-          "typischer_fehler"
-         ]
-        },
-        "transfer": {
-         "type": "object",
-         "properties": {
-          "frage": {
-           "type": "string"
-          },
-          "loesung": {
-           "type": "string"
-          },
-          "tipps": {
-           "type": "array",
-           "maxItems": 3,
-           "items": {
-            "type": "string"
-           },
-           "description": "Hinweise, die zum Denken führen, nicht zur Lösung"
-          },
-          "optionen": {
-           "type": "array",
-           "minItems": 2,
-           "maxItems": 4,
-           "items": {
-            "type": "string"
-           },
-           "description": "Die Auswahl. Die Lösung muss darunter stehen."
-          },
-          "aufloesung": {
-           "type": "string",
-           "description": "Ein Satz, warum die richtige Auswahl stimmt"
-          }
-         },
-         "required": [
-          "frage",
-          "loesung",
-          "optionen",
-          "aufloesung"
-         ]
+        "rechts": {
+          "typ": "bruch",
+          "pflicht": true,
+          "form": "[Zähler, Nenner]",
+          "beispiel": [
+            1,
+            2
+          ]
         }
-       },
-       "required": [
-        "vorhersage",
-        "beispiel",
-        "gefuehrt",
-        "selbststaendig",
-        "transfer"
-       ]
-      }
-     },
-     "required": [
-      "key",
-      "label",
-      "beschreibung",
-      "antworten",
-      "erklaerung",
-      "visualisierung",
-      "aufgaben"
-     ]
-    }
-   },
-   "hilfe": {
-    "type": "object",
-    "description": "Zweite Erklärung pro Phase: andere Worte als auf dem Schirm, auf Übungsschirmen nie die Lösung",
-    "properties": {
-     "HOOK": {
-      "type": "object",
-      "properties": {
-       "text": {
-        "type": "string"
-       },
-       "visualisierung": {
-        "type": "object",
-        "properties": {
-         "component": {
-          "type": "string",
-          "description": "Eine Id aus der Liste im Auftrag"
-         },
-         "parameters": {
-          "type": "object",
-          "description": "Genau die Parameter dieser Komponente"
-         },
-         "animation": {
-          "type": "string"
-         }
+      },
+      "animationen": [
+        "none",
+        "tip"
+      ]
+    },
+    {
+      "component": "ConceptMap",
+      "version": 1,
+      "zweck": "Begriffe und ihre Beziehungen als Netz — für Zusammenhänge, die ein Rechenweg nicht zeigt (Fotosynthese, Teilchenmodelle, Satzglieder).",
+      "parameter": {
+        "knoten": {
+          "typ": "liste[text]",
+          "zweck": "Begriffe, die gezeigt werden",
+          "pflicht": true,
+          "form": "Liste von Texten",
+          "beispiel": [
+            "erster Schritt",
+            "zweiter Schritt"
+          ]
         },
-        "required": [
-         "component",
-         "parameters",
-         "animation"
-        ]
-       }
+        "kanten": {
+          "typ": "liste[text]",
+          "zweck": "Beziehungen als „A → B“",
+          "pflicht": false,
+          "form": "Liste von Texten",
+          "beispiel": [
+            "erster Schritt",
+            "zweiter Schritt"
+          ]
+        }
       },
-      "required": [
-       "text",
-       "visualisierung"
+      "animationen": [
+        "none"
       ]
-     },
-     "RULE": {
-      "type": "object",
-      "properties": {
-       "text": {
-        "type": "string"
-       },
-       "visualisierung": {
-        "type": "object",
-        "properties": {
-         "component": {
-          "type": "string",
-          "description": "Eine Id aus der Liste im Auftrag"
-         },
-         "parameters": {
-          "type": "object",
-          "description": "Genau die Parameter dieser Komponente"
-         },
-         "animation": {
-          "type": "string"
-         }
+    },
+    {
+      "component": "DataTable",
+      "version": 1,
+      "zweck": "Werte untereinander — zum Vergleichen von Messwerten, Einheiten oder Sprachformen.",
+      "parameter": {
+        "spalten": {
+          "typ": "liste[text]",
+          "zweck": "Spaltenueberschriften",
+          "pflicht": true,
+          "form": "Liste von Texten",
+          "beispiel": [
+            "erster Schritt",
+            "zweiter Schritt"
+          ]
         },
-        "required": [
-         "component",
-         "parameters",
-         "animation"
-        ]
-       }
+        "zeilen": {
+          "typ": "liste[text]",
+          "zweck": "Zeilen als „Wert 1 | Wert 2 | …“",
+          "pflicht": true,
+          "form": "Liste von Texten",
+          "beispiel": [
+            "erster Schritt",
+            "zweiter Schritt"
+          ]
+        }
       },
-      "required": [
-       "text",
-       "visualisierung"
+      "animationen": [
+        "none"
       ]
-     },
-     "WORKED_EXAMPLE": {
-      "type": "object",
-      "properties": {
-       "text": {
-        "type": "string"
-       },
-       "visualisierung": {
-        "type": "object",
-        "properties": {
-         "component": {
-          "type": "string",
-          "description": "Eine Id aus der Liste im Auftrag"
-         },
-         "parameters": {
-          "type": "object",
-          "description": "Genau die Parameter dieser Komponente"
-         },
-         "animation": {
-          "type": "string"
-         }
-        },
-        "required": [
-         "component",
-         "parameters",
-         "animation"
-        ]
-       }
+    },
+    {
+      "component": "GenericStepFlow",
+      "version": 1,
+      "zweck": "Nummerierte Schritte in Worten. Trägt jedes Fach und dient als Rückfall, wenn eine Auswahl verworfen wurde.",
+      "parameter": {
+        "schritte": {
+          "typ": "liste[text]",
+          "zweck": "Schritte in Worten",
+          "pflicht": false,
+          "form": "Liste von Texten",
+          "beispiel": [
+            "erster Schritt",
+            "zweiter Schritt"
+          ]
+        }
       },
-      "required": [
-       "text",
-       "visualisierung"
+      "animationen": [
+        "none"
       ]
-     },
-     "GUIDED_TASK": {
-      "type": "object",
-      "properties": {
-       "text": {
-        "type": "string"
-       },
-       "visualisierung": {
-        "type": "object",
-        "properties": {
-         "component": {
-          "type": "string",
-          "description": "Eine Id aus der Liste im Auftrag"
-         },
-         "parameters": {
-          "type": "object",
-          "description": "Genau die Parameter dieser Komponente"
-         },
-         "animation": {
-          "type": "string"
-         }
-        },
-        "required": [
-         "component",
-         "parameters",
-         "animation"
-        ]
-       }
-      },
-      "required": [
-       "text",
-       "visualisierung"
-      ]
-     },
-     "INDEPENDENT_TASK": {
-      "type": "object",
-      "properties": {
-       "text": {
-        "type": "string"
-       },
-       "visualisierung": {
-        "type": "object",
-        "properties": {
-         "component": {
-          "type": "string",
-          "description": "Eine Id aus der Liste im Auftrag"
-         },
-         "parameters": {
-          "type": "object",
-          "description": "Genau die Parameter dieser Komponente"
-         },
-         "animation": {
-          "type": "string"
-         }
-        },
-        "required": [
-         "component",
-         "parameters",
-         "animation"
-        ]
-       }
-      },
-      "required": [
-       "text",
-       "visualisierung"
-      ]
-     },
-     "ADAPTATION": {
-      "type": "object",
-      "properties": {
-       "text": {
-        "type": "string"
-       },
-       "visualisierung": {
-        "type": "object",
-        "properties": {
-         "component": {
-          "type": "string",
-          "description": "Eine Id aus der Liste im Auftrag"
-         },
-         "parameters": {
-          "type": "object",
-          "description": "Genau die Parameter dieser Komponente"
-         },
-         "animation": {
-          "type": "string"
-         }
-        },
-        "required": [
-         "component",
-         "parameters",
-         "animation"
-        ]
-       }
-      },
-      "required": [
-       "text",
-       "visualisierung"
-      ]
-     }
-    },
-    "required": [
-     "HOOK",
-     "RULE",
-     "WORKED_EXAMPLE",
-     "GUIDED_TASK",
-     "INDEPENDENT_TASK",
-     "ADAPTATION"
-    ]
-   },
-   "faq": {
-    "type": "array",
-    "minItems": 2,
-    "maxItems": 5,
-    "description": "Kurze Antworten auf das, was Kinder bei diesem Konzept wirklich fragen",
-    "items": {
-     "type": "object",
-     "properties": {
-      "frage": {
-       "type": "string"
-      },
-      "antwort": {
-       "type": "string"
-      }
-     },
-     "required": [
-      "frage",
-      "antwort"
-     ]
     }
-   }
-  },
-  "required": [
-   "konzept",
-   "erstkontakt",
-   "fehlertypen",
-   "hilfe",
-   "faq"
-  ]
- },
- "registry": [
-  {
-   "component": "FractionStrip",
-   "version": 1,
-   "zweck": "Zwei gleich breite Ganze, unterschiedlich geteilt — zeigt, dass sich beim Umrechnen die Stückzahl ändert, nicht die Menge.",
-   "parameter": {
-    "a": {
-     "typ": "bruch",
-     "zweck": "erster Bruch",
-     "pflicht": true,
-     "form": "[Zähler, Nenner]",
-     "beispiel": [
-      1,
-      2
-     ]
-    },
-    "b": {
-     "typ": "bruch",
-     "zweck": "zweiter Bruch",
-     "pflicht": false,
-     "form": "[Zähler, Nenner]",
-     "beispiel": [
-      1,
-      2
-     ]
-    },
-    "gemeinsam": {
-     "typ": "ganzzahl",
-     "min": 1,
-     "zweck": "gemeinsamer Nenner, auf den umgerechnet wird",
-     "pflicht": false,
-     "form": "ganze Zahl",
-     "beispiel": 3
-    }
-   },
-   "animationen": [
-    "none",
-    "cut_then_slide"
-   ]
-  },
-  {
-   "component": "NumberLine",
-   "version": 1,
-   "zweck": "Brüche als Orte auf einer Linie — zeigt Größenverhältnisse, wo Streifen schon einmal nicht geholfen haben.",
-   "parameter": {
-    "marken": {
-     "typ": "liste[bruch]",
-     "zweck": "Brüche, die markiert werden",
-     "pflicht": true,
-     "form": "Liste von [Zähler, Nenner]",
-     "beispiel": [
-      [
-       1,
-       2
-      ],
-      [
-       1,
-       3
-      ]
-     ]
-    },
-    "bis": {
-     "typ": "bruch",
-     "zweck": "rechtes Ende der Linie",
-     "pflicht": false,
-     "form": "[Zähler, Nenner]",
-     "beispiel": [
-      1,
-      2
-     ]
-    },
-    "schritte": {
-     "typ": "ganzzahl",
-     "min": 1,
-     "zweck": "Teilstriche",
-     "pflicht": false,
-     "form": "ganze Zahl",
-     "beispiel": 3
-    }
-   },
-   "animationen": [
-    "none",
-    "walk"
-   ]
-  },
-  {
-   "component": "AreaModel",
-   "version": 1,
-   "zweck": "Ein Rechteck in Zeilen und Spalten — für Anteile und später für das Multiplizieren von Brüchen.",
-   "parameter": {
-    "spalten": {
-     "typ": "ganzzahl",
-     "min": 1,
-     "max": 20,
-     "pflicht": true,
-     "form": "ganze Zahl",
-     "beispiel": 3
-    },
-    "zeilen": {
-     "typ": "ganzzahl",
-     "min": 1,
-     "max": 20,
-     "pflicht": true,
-     "form": "ganze Zahl",
-     "beispiel": 3
-    },
-    "markiert": {
-     "typ": "ganzzahl",
-     "min": 0,
-     "zweck": "wie viele Felder gefüllt sind",
-     "pflicht": false,
-     "form": "ganze Zahl",
-     "beispiel": 3
-    }
-   },
-   "animationen": [
-    "none",
-    "split"
-   ]
-  },
-  {
-   "component": "Balance",
-   "version": 1,
-   "zweck": "Eine Waage — für Gleichungen und Vergleiche, bei denen es um „gleich viel“ geht, nicht um Anteile.",
-   "parameter": {
-    "links": {
-     "typ": "bruch",
-     "pflicht": true,
-     "form": "[Zähler, Nenner]",
-     "beispiel": [
-      1,
-      2
-     ]
-    },
-    "rechts": {
-     "typ": "bruch",
-     "pflicht": true,
-     "form": "[Zähler, Nenner]",
-     "beispiel": [
-      1,
-      2
-     ]
-    }
-   },
-   "animationen": [
-    "none",
-    "tip"
-   ]
-  },
-  {
-   "component": "GenericStepFlow",
-   "version": 1,
-   "zweck": "Nummerierte Schritte in Worten. Trägt jedes Fach und dient als Rückfall, wenn eine Auswahl verworfen wurde.",
-   "parameter": {
-    "schritte": {
-     "typ": "liste[text]",
-     "zweck": "Schritte in Worten",
-     "pflicht": false,
-     "form": "Liste von Texten",
-     "beispiel": [
-      "erster Schritt",
-      "zweiter Schritt"
-     ]
-    }
-   },
-   "animationen": [
-    "none"
-   ]
-  }
- ],
- "instructions": "Du entwirfst eine Lernreihe für ein Kind der Klasse 6 im Fach mathematik.\n\nThema: (Thema steht im Auftrag)\n\nEs gibt noch kein Fehlersignal — niemand hat etwas falsch gerechnet. Du\nentwirfst die Lektion, mit der Karo herausfindet, wo das Kind steht.\n\nSo wird unterrichtet:\n- Eine Lektion behandelt GENAU EIN Konzept. Ist „(Thema steht im Auftrag)\" größer als ein\n  Konzept, nimm das erste, das ein Kind dafür braucht.\n- Die Einheit des Inhalts ist die Fehlvorstellung, nicht das Thema. Nenne\n  zwei bis vier Fehlvorstellungen, die Kinder bei diesem Konzept WIRKLICH\n  haben, und zu jeder die falschen Antworten, an denen man sie erkennt.\n- Zu „typischer_fehler\" bei den Aufgaben: schreib auf, was GENAU diese\n  Fehlvorstellung bei GENAU dieser Aufgabe ergibt. Nicht die Lösung. Daran\n  erkennt Karo später dieselbe Fehlvorstellung wieder — ist das Feld falsch,\n  erkennt Karo beim nächsten Kind nichts.\n- Jede Erklärung: ein Haken, der an die eigene Antwort anknüpft; eine\n  Erkenntnis, die das Kind selbst zieht; eine Regel als Handlung. Kein „das\n  ist falsch\". Kein Lob, keine Emojis, keine Fachwörter vor dem Bild.\n- Das Bild beschreibst du in Worten: was zu sehen ist, was sich bewegt, was\n  gleich bleibt. Was gleich bleibt, ist das Wichtigste.\n\nDarstellungen wählst du aus, du erfindest sie nicht. Erlaubt ist\nausschließlich eine dieser Komponenten mit genau ihren Parametern:\n\n[\n  {\n    \"component\": \"FractionStrip\",\n    \"version\": 1,\n    \"zweck\": \"Zwei gleich breite Ganze, unterschiedlich geteilt — zeigt, dass sich beim Umrechnen die Stückzahl ändert, nicht die Menge.\",\n    \"parameter\": {\n      \"a\": {\n        \"typ\": \"bruch\",\n        \"zweck\": \"erster Bruch\",\n        \"pflicht\": true,\n        \"form\": \"[Zähler, Nenner]\",\n        \"beispiel\": [\n          1,\n          2\n        ]\n      },\n      \"b\": {\n        \"typ\": \"bruch\",\n        \"zweck\": \"zweiter Bruch\",\n        \"pflicht\": false,\n        \"form\": \"[Zähler, Nenner]\",\n        \"beispiel\": [\n          1,\n          2\n        ]\n      },\n      \"gemeinsam\": {\n        \"typ\": \"ganzzahl\",\n        \"min\": 1,\n        \"zweck\": \"gemeinsamer Nenner, auf den umgerechnet wird\",\n        \"pflicht\": false,\n        \"form\": \"ganze Zahl\",\n        \"beispiel\": 3\n      }\n    },\n    \"animationen\": [\n      \"none\",\n      \"cut_then_slide\"\n    ]\n  },\n  {\n    \"component\": \"NumberLine\",\n    \"version\": 1,\n    \"zweck\": \"Brüche als Orte auf einer Linie — zeigt Größenverhältnisse, wo Streifen schon einmal nicht geholfen haben.\",\n    \"parameter\": {\n      \"marken\": {\n        \"typ\": \"liste[bruch]\",\n        \"zweck\": \"Brüche, die markiert werden\",\n        \"pflicht\": true,\n        \"form\": \"Liste von [Zähler, Nenner]\",\n        \"beispiel\": [\n          [\n            1,\n            2\n          ],\n          [\n            1,\n            3\n          ]\n        ]\n      },\n      \"bis\": {\n        \"typ\": \"bruch\",\n        \"zweck\": \"rechtes Ende der Linie\",\n        \"pflicht\": false,\n        \"form\": \"[Zähler, Nenner]\",\n        \"beispiel\": [\n          1,\n          2\n        ]\n      },\n      \"schritte\": {\n        \"typ\": \"ganzzahl\",\n        \"min\": 1,\n        \"zweck\": \"Teilstriche\",\n        \"pflicht\": false,\n        \"form\": \"ganze Zahl\",\n        \"beispiel\": 3\n      }\n    },\n    \"animationen\": [\n      \"none\",\n      \"walk\"\n    ]\n  },\n  {\n    \"component\": \"AreaModel\",\n    \"version\": 1,\n    \"zweck\": \"Ein Rechteck in Zeilen und Spalten — für Anteile und später für das Multiplizieren von Brüchen.\",\n    \"parameter\": {\n      \"spalten\": {\n        \"typ\": \"ganzzahl\",\n        \"min\": 1,\n        \"max\": 20,\n        \"pflicht\": true,\n        \"form\": \"ganze Zahl\",\n        \"beispiel\": 3\n      },\n      \"zeilen\": {\n        \"typ\": \"ganzzahl\",\n        \"min\": 1,\n        \"max\": 20,\n        \"pflicht\": true,\n        \"form\": \"ganze Zahl\",\n        \"beispiel\": 3\n      },\n      \"markiert\": {\n        \"typ\": \"ganzzahl\",\n        \"min\": 0,\n        \"zweck\": \"wie viele Felder gefüllt sind\",\n        \"pflicht\": false,\n        \"form\": \"ganze Zahl\",\n        \"beispiel\": 3\n      }\n    },\n    \"animationen\": [\n      \"none\",\n      \"split\"\n    ]\n  },\n  {\n    \"component\": \"Balance\",\n    \"version\": 1,\n    \"zweck\": \"Eine Waage — für Gleichungen und Vergleiche, bei denen es um „gleich viel“ geht, nicht um Anteile.\",\n    \"parameter\": {\n      \"links\": {\n        \"typ\": \"bruch\",\n        \"pflicht\": true,\n        \"form\": \"[Zähler, Nenner]\",\n        \"beispiel\": [\n          1,\n          2\n        ]\n      },\n      \"rechts\": {\n        \"typ\": \"bruch\",\n        \"pflicht\": true,\n        \"form\": \"[Zähler, Nenner]\",\n        \"beispiel\": [\n          1,\n          2\n        ]\n      }\n    },\n    \"animationen\": [\n      \"none\",\n      \"tip\"\n    ]\n  },\n  {\n    \"component\": \"GenericStepFlow\",\n    \"version\": 1,\n    \"zweck\": \"Nummerierte Schritte in Worten. Trägt jedes Fach und dient als Rückfall, wenn eine Auswahl verworfen wurde.\",\n    \"parameter\": {\n      \"schritte\": {\n        \"typ\": \"liste[text]\",\n        \"zweck\": \"Schritte in Worten\",\n        \"pflicht\": false,\n        \"form\": \"Liste von Texten\",\n        \"beispiel\": [\n          \"erster Schritt\",\n          \"zweiter Schritt\"\n        ]\n      }\n    },\n    \"animationen\": [\n      \"none\"\n    ]\n  }\n]\n\nGib niemals HTML, SVG, JavaScript, CSS oder Zeichenanweisungen aus — weder\nim Text noch in den Parametern. Passt keine Komponente, nimm\nGenericStepFlow.\n\n„visualisierung_alternativ\" muss eine ANDERE Komponente sein als\n„visualisierung\": sie wird gezeigt, wenn die erste nicht geholfen hat.\n\nJede Fehlvorstellung braucht alle fünf Aufgaben: vorhersage, beispiel,\ngefuehrt, selbststaendig, transfer. Fehlt eine, bricht die Lektion mittendrin\nab. Die Zahlen im Beispiel müssen sich von denen der geführten Aufgabe\nunterscheiden, sonst schreibt das Kind nur ab.\n\nZu „hilfe\": Das Kind kann in jeder Phase „Das habe ich nicht verstanden\"\ndrücken. Schreib dafür pro Phase eine zweite Erklärung — ANDERE Worte als\nauf dem Schirm, denn einen Satz zu wiederholen, den jemand nicht verstanden\nhat, hilft nicht. Auf Übungsschirmen erklärst du die Aufgabe, nennst aber\nnie die Lösung.\n\nZu „faq\": zwei bis fünf kurze Antworten auf das, was Kinder bei diesem\nKonzept wirklich fragen.\n\nAlles, was du rechnest, wird nachgerechnet. Eine Gleichung, die nicht\naufgeht, führt dazu, dass die ganze Lektion verworfen wird — prüfe jede\nZahl, bevor du sie hinschreibst. Ausgenommen sind die Felder, die einen\nDenkfehler BESCHREIBEN: dort gehört die falsche Rechnung hin."
+  ],
+  "instructions": "Du entwirfst eine fachlich eingeordnete Lernreihe im Fach aus der Anfrage.\n\nDie Klassenstufe des anfragenden Kindes bestimmt NICHT die Einordnung des Inhalts.\nOrdne klasse_von und klasse_bis nach dem tatsächlichen Konzept, seinen Voraussetzungen\nund dem üblichen curricularen Lernniveau ein. Bei geprüften Curriculum-Metadaten\nübernimm first_contact_grade und target_grade exakt. Ohne solche Metadaten bewerte\ndie Einordnung unabhängig vom Nutzer; erfinde keine passende Klasse für dessen Wunsch.\nDie Lernreihe muss zum fachlichen Niveau passen, nicht zur Profilklasse.\n\nThema: das angefragte Konzept\n\nEs gibt noch kein Fehlersignal — niemand hat etwas falsch gerechnet. Du\nentwirfst die Lektion, mit der Karo herausfindet, wo das Kind steht.\n\nSo wird unterrichtet:\n- Eine Lektion behandelt GENAU EIN Konzept. Ist „das angefragte Konzept\" größer als ein\n  Konzept, nimm das erste, das ein Kind dafür braucht.\n- Die Einheit des Inhalts ist die Fehlvorstellung, nicht das Thema. Nenne\n  zwei bis vier Fehlvorstellungen, die Kinder bei diesem Konzept WIRKLICH\n  haben, und zu jeder die falschen Antworten, an denen man sie erkennt.\n- Zu „typischer_fehler\" bei den Aufgaben: schreib auf, was GENAU diese\n  Fehlvorstellung bei GENAU dieser Aufgabe ergibt. Nicht die Lösung. Daran\n  erkennt Karo später dieselbe Fehlvorstellung wieder — ist das Feld falsch,\n  erkennt Karo beim nächsten Kind nichts.\n- Rechenaufgaben: gib eine „vorlage\" an, keine ausgerechneten Zahlen. Du\n  schreibst den Satz und die Bedingungen, Karo würfelt die Zahlen und rechnet\n  die Lösung selbst aus. Beispiel:\n\n      \"vorlage\": {\"vorlage\": \"{a}/{b} + {c}/{d}\",\n                  \"frage\": \"Rechne {aufgabe}.\",\n                  \"bedingungen\": [\"b != d\", \"a < b\", \"c < d\", \"kgv(b,d) <= 24\"]}\n\n  Die Bedingungen sind der didaktische Teil: sie entscheiden, wie schwer die\n  Aufgabe wird. Erlaubt sind + - * / % ( ) sowie < > == != and or und die\n  Funktionen kgv, ggt, abs, min, max. Füll „frage\" und „loesung\" trotzdem\n  lesbar aus — Karo ersetzt beides durch das Gerechnete.\n  Ohne Zahlen (Zuordnen, Begründen, Sprache) lässt du „vorlage\" weg.\n- Jede Erklärung: ein Haken, der an die eigene Antwort anknüpft; eine\n  Erkenntnis, die das Kind selbst zieht; eine Regel als Handlung. Kein „das\n  ist falsch\". Kein Lob, keine Emojis, keine Fachwörter vor dem Bild.\n- Das Bild beschreibst du in Worten: was zu sehen ist, was sich bewegt, was\n  gleich bleibt. Was gleich bleibt, ist das Wichtigste.\n\nDarstellungen wählst du aus, du erfindest sie nicht. Erlaubt ist\nausschließlich eine dieser Komponenten mit genau ihren Parametern:\n\n[\n  {\n    \"component\": \"FractionStrip\",\n    \"version\": 1,\n    \"zweck\": \"Zwei gleich breite Ganze, unterschiedlich geteilt — zeigt, dass sich beim Umrechnen die Stückzahl ändert, nicht die Menge.\",\n    \"parameter\": {\n      \"a\": {\n        \"typ\": \"bruch\",\n        \"zweck\": \"erster Bruch\",\n        \"pflicht\": true,\n        \"form\": \"[Zähler, Nenner]\",\n        \"beispiel\": [\n          1,\n          2\n        ]\n      },\n      \"b\": {\n        \"typ\": \"bruch\",\n        \"zweck\": \"zweiter Bruch\",\n        \"pflicht\": false,\n        \"form\": \"[Zähler, Nenner]\",\n        \"beispiel\": [\n          1,\n          2\n        ]\n      },\n      \"gemeinsam\": {\n        \"typ\": \"ganzzahl\",\n        \"min\": 1,\n        \"zweck\": \"gemeinsamer Nenner, auf den umgerechnet wird\",\n        \"pflicht\": false,\n        \"form\": \"ganze Zahl\",\n        \"beispiel\": 3\n      }\n    },\n    \"animationen\": [\n      \"none\",\n      \"cut_then_slide\"\n    ]\n  },\n  {\n    \"component\": \"NumberLine\",\n    \"version\": 1,\n    \"zweck\": \"Brüche als Orte auf einer Linie — zeigt Größenverhältnisse, wo Streifen schon einmal nicht geholfen haben.\",\n    \"parameter\": {\n      \"marken\": {\n        \"typ\": \"liste[bruch]\",\n        \"zweck\": \"Brüche, die markiert werden\",\n        \"pflicht\": true,\n        \"form\": \"Liste von [Zähler, Nenner]\",\n        \"beispiel\": [\n          [\n            1,\n            2\n          ],\n          [\n            1,\n            3\n          ]\n        ]\n      },\n      \"bis\": {\n        \"typ\": \"bruch\",\n        \"zweck\": \"rechtes Ende der Linie\",\n        \"pflicht\": false,\n        \"form\": \"[Zähler, Nenner]\",\n        \"beispiel\": [\n          1,\n          2\n        ]\n      },\n      \"schritte\": {\n        \"typ\": \"ganzzahl\",\n        \"min\": 1,\n        \"zweck\": \"Teilstriche\",\n        \"pflicht\": false,\n        \"form\": \"ganze Zahl\",\n        \"beispiel\": 3\n      }\n    },\n    \"animationen\": [\n      \"none\",\n      \"walk\"\n    ]\n  },\n  {\n    \"component\": \"AreaModel\",\n    \"version\": 1,\n    \"zweck\": \"Ein Rechteck in Zeilen und Spalten — für Anteile und später für das Multiplizieren von Brüchen.\",\n    \"parameter\": {\n      \"spalten\": {\n        \"typ\": \"ganzzahl\",\n        \"min\": 1,\n        \"max\": 20,\n        \"pflicht\": true,\n        \"form\": \"ganze Zahl\",\n        \"beispiel\": 3\n      },\n      \"zeilen\": {\n        \"typ\": \"ganzzahl\",\n        \"min\": 1,\n        \"max\": 20,\n        \"pflicht\": true,\n        \"form\": \"ganze Zahl\",\n        \"beispiel\": 3\n      },\n      \"markiert\": {\n        \"typ\": \"ganzzahl\",\n        \"min\": 0,\n        \"zweck\": \"wie viele Felder gefüllt sind\",\n        \"pflicht\": false,\n        \"form\": \"ganze Zahl\",\n        \"beispiel\": 3\n      }\n    },\n    \"animationen\": [\n      \"none\",\n      \"split\"\n    ]\n  },\n  {\n    \"component\": \"Balance\",\n    \"version\": 1,\n    \"zweck\": \"Eine Waage — für Gleichungen und Vergleiche, bei denen es um „gleich viel“ geht, nicht um Anteile.\",\n    \"parameter\": {\n      \"links\": {\n        \"typ\": \"bruch\",\n        \"pflicht\": true,\n        \"form\": \"[Zähler, Nenner]\",\n        \"beispiel\": [\n          1,\n          2\n        ]\n      },\n      \"rechts\": {\n        \"typ\": \"bruch\",\n        \"pflicht\": true,\n        \"form\": \"[Zähler, Nenner]\",\n        \"beispiel\": [\n          1,\n          2\n        ]\n      }\n    },\n    \"animationen\": [\n      \"none\",\n      \"tip\"\n    ]\n  },\n  {\n    \"component\": \"ConceptMap\",\n    \"version\": 1,\n    \"zweck\": \"Begriffe und ihre Beziehungen als Netz — für Zusammenhänge, die ein Rechenweg nicht zeigt (Fotosynthese, Teilchenmodelle, Satzglieder).\",\n    \"parameter\": {\n      \"knoten\": {\n        \"typ\": \"liste[text]\",\n        \"zweck\": \"Begriffe, die gezeigt werden\",\n        \"pflicht\": true,\n        \"form\": \"Liste von Texten\",\n        \"beispiel\": [\n          \"erster Schritt\",\n          \"zweiter Schritt\"\n        ]\n      },\n      \"kanten\": {\n        \"typ\": \"liste[text]\",\n        \"zweck\": \"Beziehungen als „A → B“\",\n        \"pflicht\": false,\n        \"form\": \"Liste von Texten\",\n        \"beispiel\": [\n          \"erster Schritt\",\n          \"zweiter Schritt\"\n        ]\n      }\n    },\n    \"animationen\": [\n      \"none\"\n    ]\n  },\n  {\n    \"component\": \"DataTable\",\n    \"version\": 1,\n    \"zweck\": \"Werte untereinander — zum Vergleichen von Messwerten, Einheiten oder Sprachformen.\",\n    \"parameter\": {\n      \"spalten\": {\n        \"typ\": \"liste[text]\",\n        \"zweck\": \"Spaltenueberschriften\",\n        \"pflicht\": true,\n        \"form\": \"Liste von Texten\",\n        \"beispiel\": [\n          \"erster Schritt\",\n          \"zweiter Schritt\"\n        ]\n      },\n      \"zeilen\": {\n        \"typ\": \"liste[text]\",\n        \"zweck\": \"Zeilen als „Wert 1 | Wert 2 | …“\",\n        \"pflicht\": true,\n        \"form\": \"Liste von Texten\",\n        \"beispiel\": [\n          \"erster Schritt\",\n          \"zweiter Schritt\"\n        ]\n      }\n    },\n    \"animationen\": [\n      \"none\"\n    ]\n  },\n  {\n    \"component\": \"GenericStepFlow\",\n    \"version\": 1,\n    \"zweck\": \"Nummerierte Schritte in Worten. Trägt jedes Fach und dient als Rückfall, wenn eine Auswahl verworfen wurde.\",\n    \"parameter\": {\n      \"schritte\": {\n        \"typ\": \"liste[text]\",\n        \"zweck\": \"Schritte in Worten\",\n        \"pflicht\": false,\n        \"form\": \"Liste von Texten\",\n        \"beispiel\": [\n          \"erster Schritt\",\n          \"zweiter Schritt\"\n        ]\n      }\n    },\n    \"animationen\": [\n      \"none\"\n    ]\n  }\n]\n\nGib niemals HTML, SVG, JavaScript, CSS oder Zeichenanweisungen aus — weder\nim Text noch in den Parametern. Passt keine Komponente, nimm\nGenericStepFlow.\n\n„visualisierung_alternativ\" muss eine ANDERE Komponente sein als\n„visualisierung\": sie wird gezeigt, wenn die erste nicht geholfen hat.\n\nJede Fehlvorstellung braucht alle fünf Aufgaben: vorhersage, beispiel,\ngefuehrt, selbststaendig, transfer. Fehlt eine, bricht die Lektion mittendrin\nab. Die Zahlen im Beispiel müssen sich von denen der geführten Aufgabe\nunterscheiden, sonst schreibt das Kind nur ab.\n\nZu „hilfe\": Das Kind kann in jeder Phase „Das habe ich nicht verstanden\"\ndrücken. Schreib dafür pro Phase eine zweite Erklärung — ANDERE Worte als\nauf dem Schirm, denn einen Satz zu wiederholen, den jemand nicht verstanden\nhat, hilft nicht. Auf Übungsschirmen erklärst du die Aufgabe, nennst aber\nnie die Lösung.\n\nZu „faq\": zwei bis fünf kurze Antworten auf das, was Kinder bei diesem\nKonzept wirklich fragen.\n\nAlles, was du rechnest, wird nachgerechnet. Eine Gleichung, die nicht\naufgeht, führt dazu, dass die ganze Lektion verworfen wird — prüfe jede\nZahl, bevor du sie hinschreibst. Ausgenommen sind die Felder, die einen\nDenkfehler BESCHREIBEN: dort gehört die falsche Rechnung hin."
 }

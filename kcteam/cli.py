@@ -603,6 +603,29 @@ def cmd_rerender(cfg, args) -> int:
     return 0
 
 
+def cmd_seed_slices(cfg, args) -> int:
+    from .slices import seed_slices
+    db = DB(cfg.database_url)
+    db.migrate()
+    gezaehlt = seed_slices(db, faecher=set(args.fach or []) or None)
+    for fach, ids in sorted(gezaehlt.items()):
+        print(f"✓ {fach:12} {len(ids)} Konzepte freigegeben")
+    print(f"Insgesamt {sum(len(v) for v in gezaehlt.values())} Konzepte aus den kuratierten Slices.")
+    return 0
+
+
+def cmd_gap_report(cfg, args) -> int:
+    from .gap_report import curriculum_gap_report, format_report
+    db = DB(cfg.database_url)
+    db.migrate()
+    bericht = curriculum_gap_report(db)
+    if args.json:
+        print(json.dumps(bericht, ensure_ascii=False, indent=2, default=str))
+    else:
+        print(format_report(bericht))
+    return 0 if bericht["summary"]["ok"] else 2
+
+
 def cmd_api(cfg, args) -> int:
     import uvicorn
     db = DB(cfg.database_url)
@@ -757,6 +780,12 @@ def main(argv: list[str] | None = None) -> int:
 
     sub.add_parser("rerender-visuals", help="alle gespeicherten Bilder mit dem aktuellen Renderer neu zeichnen")
 
+    p = sub.add_parser("seed-slices", help="kuratierte Slices (karo_contract.slices) in den Katalog schreiben")
+    p.add_argument("--fach", "-f", action="append", help="nur dieses Fach (mehrfach möglich)")
+
+    p = sub.add_parser("gap-report", help="Curriculum-Lückenbericht: Graph, Kalibrierung, Diagnose, Lektionen")
+    p.add_argument("--json", action="store_true", help="Bericht als JSON ausgeben")
+
     p = sub.add_parser("api", help="Curriculum-Service über HTTP (für Karo und andere Abnehmer)")
     p.add_argument("--host", default=os.environ.get("KCTEAM_API_HOST", "127.0.0.1"))
     p.add_argument("--port", type=int, default=int(os.environ.get("KCTEAM_API_PORT", "8088")))
@@ -796,7 +825,8 @@ def main(argv: list[str] | None = None) -> int:
                 "providers": cmd_providers, "init-db": cmd_init_db, "preview": cmd_preview,
                 "catalog": cmd_catalog, "subjects": cmd_subjects, "check": cmd_check, "simulate": cmd_simulate,
                 "serve": cmd_serve, "request": cmd_request, "export-sqlite": cmd_export_sqlite, "requests": cmd_requests, "demand": cmd_demand,
-                "api": cmd_api, "rerender-visuals": cmd_rerender, "api-client": cmd_api_client, "admin": cmd_admin, "bench": cmd_bench}
+                "api": cmd_api, "rerender-visuals": cmd_rerender, "api-client": cmd_api_client, "admin": cmd_admin, "bench": cmd_bench,
+                "seed-slices": cmd_seed_slices, "gap-report": cmd_gap_report}
     try:
         return handlers[cmd](cfg, args)
     except psycopg.OperationalError as exc:
