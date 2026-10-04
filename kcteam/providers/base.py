@@ -55,6 +55,11 @@ class Provider:
     name: str = "base"
     settings: dict[str, Any] = field(default_factory=dict)
     required_env: tuple[str, ...] = ()
+    #: Erzwingt die API das Antwort-Schema selbst (z. B. Devin mit
+    #: `structured_output_schema`)? Dann darf der Prompt die Schema-Kopie
+    #: auslassen — bei grossen Vorgaben wie dem Lektionsformat ist die
+    #: eingebettete Kopie groesser als der Rest des Auftrags zusammen.
+    structured_output_native: bool = False
 
     def available(self) -> tuple[bool, str]:
         missing = [v for v in self.required_env if not os.environ.get(v)]

@@ -231,7 +231,12 @@ class AgentRunner:
                 parts.append(self.team.section(role))
             if extra_system:
                 parts.append(extra_system)
-            parts.append("## JSON-Schema deiner Antwort\n```json\n" + compact(json_schema) + "\n```")
+            if not getattr(self.provider, "structured_output_native", False):
+                parts.append("## JSON-Schema deiner Antwort\n```json\n" + compact(json_schema) + "\n```")
+            # Bei Providern mit `structured_output_native` wird das Schema als
+            # API-Feld erzwungen; die Prompt-Kopie (bei Karos Lektionsformat
+            # ~29k Zeichen) wuerde sonst die Vorgaben-Grenze sprengen — jede
+            # Nachfrage mit Rückmeldung wächst noch einmal.
             self._prompt_cache[key] = "\n\n".join(parts)
         meta = {**(meta or {}), "json_schema": json_schema}
         return self._call(role, task, payload, self._prompt_cache[key], validate, entity_id=entity_id,

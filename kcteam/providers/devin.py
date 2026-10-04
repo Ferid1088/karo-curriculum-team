@@ -86,6 +86,7 @@ def _key(provider: str, model: str, system: str, user: str) -> str:
 class DevinProvider(Provider):
     def __init__(self, settings: dict):
         super().__init__(name="devin", settings=settings, required_env=("DEVIN_API_KEY",))
+        self.structured_output_native = True
         self.base_url = (settings.get("base_url") or "https://api.devin.ai/v1").rstrip("/")
         self.poll_seconds = int(settings.get("poll_seconds", 300))
         self.max_session_seconds = int(settings.get("max_session_seconds", 7200))

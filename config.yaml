@@ -94,4 +94,23 @@ ondemand:
   max_attempts: 3             # Fehlversuche pro Auftrag, danach 'failed'
   allow_unknown_subjects: false
 
+# Betriebsgrenzen, ab denen ein Zustand Aufmerksamkeit verdient. `kcteam doctor`
+# wertet sie gegen die Datenbank aus — sie sind Dokumentation UND Schranke,
+# keine Magie im Code. Kein Wert schaltet etwas ab: sie melden, Menschen
+# entscheiden (Rollback ist eine bewusste Handlung, kein Automatismus).
+alerts:
+  # Eine provider_session oder ein Export, die laenger "working"/"queued"
+  # steht, als ein ganzer Devin-Lauf dauern duerfte, steckt vermutlich fest.
+  stuck_session_minutes: 150
+  pending_export_minutes: 120
+  # Verwirft der Import oder die Pruefkette einen Grossteil der Lieferungen,
+  # stimmt etwas am Format oder an der Autoren-Anleitung nicht.
+  validation_reject_rate: 0.30     # Anteil der letzten 50 Exporte
+  # Verliert der Anbieter Sessions haeufig, deutet das auf Zugangs- oder
+  # Stabilitaetsprobleme — nicht auf einzelne Ausreisser.
+  missing_remote_rate: 0.20        # Anteil der letzten 50 Sessions
+  # Ein KI-Aufruf aus dem Kinder-Lernpfad von Karo verletzt die
+  # Kernarchitektur — der Wert ist absichtlich 0 und bleibt es.
+  runtime_ai_calls: 0
+
 export_dir: ${KCTEAM_EXPORT_DIR:-/data/export}

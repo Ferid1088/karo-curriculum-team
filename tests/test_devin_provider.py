@@ -534,3 +534,85 @@ def test_lektion_export_ueber_devin_mit_vertragspruefung(env):
     jsonschema.validate(out["lesson"], karo["schema"])     # Vertrag erfüllt
     assert db.one("SELECT 1 AS x FROM curriculum.agent_calls WHERE provider='devin' "
                   "AND role='lektionsautor'")
+
+
+# --------------------------------------------------------------------------
+# Vorgaben-Grenze: die Schema-Kopie im Prompt
+# --------------------------------------------------------------------------
+
+class _DBNull:
+    """Minimum fuer call_json ohne Postgres: Pause-Store und Aufruf-Log."""
+    url = "postgresql://unused"
+
+    def query(self, *a, **k):
+        return []
+
+    def one(self, *a, **k):
+        return None
+
+    def log_call(self, *a, **k):
+        pass
+
+
+class _Aufzeichner(MockProvider):
+    """Merkt sich den System-Prompt statt eine Rolle zu spielen."""
+
+    def __init__(self, native: bool):
+        super().__init__({})
+        self.structured_output_native = native
+        self.systeme: list[str] = []
+
+    def complete(self, *, system, user, model, web_search=False, meta=None):
+        self.systeme.append(system)
+        return Completion(text='{"ok": true}', model="t")
+
+
+def _runner(provider):
+    from kcteam.agents import AgentRunner
+    from kcteam.config import load_config
+    return AgentRunner(cfg=load_config(), provider=provider, db=_DBNull(), run_id="t")
+
+
+def test_call_json_ohne_schemakopie_bei_nativem_structured_output():
+    """Devin erzwingt das Schema über das API-Feld — die Prompt-Kopie von
+    Karos Lektionsformat (~29k Zeichen) hätte den Auftrag allein schon über
+    die Grenze geschoben. Andere Anbieter brauchen sie weiter im Text."""
+    prov = _Aufzeichner(native=True)
+    _runner(prov).call_json("lektionsautor", "t", {}, {"type": "object"},
+                            lambda x: x, entity_id="E")
+    assert "JSON-Schema deiner Antwort" not in prov.systeme[0]
+
+    prov2 = _Aufzeichner(native=False)
+    _runner(prov2).call_json("lektionsautor", "t", {}, {"type": "object"},
+                             lambda x: x, entity_id="E")
+    assert "JSON-Schema deiner Antwort" in prov2.systeme[0]
+
+
+def test_grounding_bleibt_im_budget_und_unverstuemmelt():
+    """Viele Fehlvorstellungen + Beispiele: die Grundlage wird an ganzen
+    Einträgen verkleinert, nie mitten im Text abgeschnitten."""
+    from kcteam import lessons
+    gross = {
+        "konzept": {"id": "X", "title": "t" * 500},
+        "fehlvorstellungen": [
+            {"key": f"F{i}", "beschreibung": "b" * 400, "abhilfe": "a" * 200,
+             "bekannte_falsche_antworten": ["x" * 80] * 8}
+            for i in range(8)],
+        "aufgaben_beispiele": [{"art": "diagnostic", "niveau": "mitte",
+                                "aufgabe": "f" * 300, "loesung": "l"}
+                               for _ in range(10)],
+    }
+    klein = lessons._im_budget(gross)
+    from kcteam.agents import compact
+    assert len(compact(klein)) <= lessons._GROUNDING_BUDGET
+    # Ganze Einträge verkleinert — kein Feld halbiert, kein Text abgeschnitten
+    assert all(len(m["beschreibung"]) == 400 for m in klein["fehlvorstellungen"])
+    assert len(klein["aufgaben_beispiele"]) <= 10
+    json.loads(compact(klein))   # bleibt gültiges JSON
+
+
+def test_grounding_unter_budget_bleibt_unberuehrt():
+    from kcteam import lessons
+    data = {"konzept": {"id": "X"}, "fehlvorstellungen": [],
+            "aufgaben_beispiele": [{"aufgabe": "f"}]}
+    assert lessons._im_budget(data) is data

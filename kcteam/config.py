@@ -46,6 +46,7 @@ class Config:
     karo_spec_max_chars: int
     pipeline: dict[str, Any] = field(default_factory=dict)
     export_dir: str = "/data/export"
+    alerts: dict[str, Any] = field(default_factory=dict)
 
     def provider_settings(self, name: str) -> dict[str, Any]:
         return dict(self.raw.get("providers", {}).get(name, {}))
@@ -70,6 +71,7 @@ def load_config(path: str | os.PathLike | None = None) -> Config:
         karo_spec_max_chars=int(raw.get("karo_spec_max_chars", 12000)),
         pipeline=raw.get("pipeline", {}) or {},
         export_dir=raw.get("export_dir", "/data/export"),
+        alerts=raw.get("alerts", {}) or {},
     )
 
 

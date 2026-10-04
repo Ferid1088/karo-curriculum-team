@@ -315,6 +315,11 @@ def cmd_doctor(cfg, args) -> int:
               '--profile agent --profile admin up -d')
         return 1
     print("\n✓ Alle Dienste laufen auf demselben Stand.")
+    # Betriebsgrenzen aus config.yaml gegen den aktuellen Stand —
+    # Befunde sind Hinweise an einen Menschen, sie schalten nichts ab.
+    from . import alerts
+    for fund in alerts.pruefen(db, cfg):
+        print(f"  ⚠ {fund['art']}: {fund['text']}")
     return 0
 
 

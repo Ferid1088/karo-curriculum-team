@@ -560,6 +560,50 @@ def grounding(db, concept_id: str, grade: int, topic: str | None) -> dict:
     }
 
 
+#: Wie gross die Grundlage fuer den Autor hoechstens werden darf. Der Rest
+#: des Auftrags (Rollenregeln, Format des Abnehmers, Rückmeldung bei
+#: Nachfragen) braucht bei Devin Platz in den 29.500 Zeichen — eine Lektion
+#: mit vielen Fehlvorstellungen lag schon einmal drüber und wurde dreimal
+#: als zu gross zurückgemeldet statt geschrieben.
+_GROUNDING_BUDGET = 6_000
+
+
+def _im_budget(data: dict) -> dict:
+    """Kuerzt die beispielhaften Teile der Grundlage auf das Budget.
+
+    Abgeschnitten wird nichts — Listen werden an ganzen Eintraegen
+    verkuerzt (weniger Beispielantworten pro Fehlvorstellung, weniger
+    Beispielaufgaben), nie mitten im Text. Ordnung bleibt: was am Ende
+    uebrig ist, ist das Wichtigste zuerst.
+    """
+    from .agents import compact
+    if len(compact(data)) <= _GROUNDING_BUDGET:
+        return data
+    data = json.loads(compact(data))
+    fehle = data.get("fehlvorstellungen") or []
+    # Erst die langen Beispielsammlungen verkleinern (8 -> 4 -> 2 -> 0)
+    for grenze in (4, 2, 0):
+        for m in fehle:
+            m["bekannte_falsche_antworten"] = (m.get("bekannte_falsche_antworten") or [])[:grenze]
+        if len(compact(data)) <= _GROUNDING_BUDGET:
+            return data
+    # Dann Beispielaufgaben und Fehlvorstellung-Detail kuerzen
+    for grenze in (6, 4, 2):
+        data["aufgaben_beispiele"] = (data.get("aufgaben_beispiele") or [])[:grenze]
+        if len(compact(data)) <= _GROUNDING_BUDGET:
+            return data
+    data["fehlvorstellungen"] = [{"key": m.get("key"), "beschreibung": m.get("beschreibung"),
+                                  "abhilfe": m.get("abhilfe"), "bekannte_falsche_antworten": []}
+                                 for m in fehle]
+    for grenze in (4, 2, 1, 0):
+        if len(compact(data)) <= _GROUNDING_BUDGET:
+            return data
+        data["fehlvorstellungen"] = data["fehlvorstellungen"][:grenze]
+    # Ist das Konzept selbst schon ueber dem Budget, ist es die Aufgabe des
+    # Anbieters, die Grenze als Fehler zu melden — wir kuerzen kein Pflichtfeld.
+    return data
+
+
 def generate(pipe, db, row: dict) -> tuple[str, Any, str | None]:
     """Erzeugt die Lektion für einen Export. Gibt (status, lektion, grund) zurück."""
     spec = row["format_spec"]
@@ -579,7 +623,7 @@ def generate(pipe, db, row: dict) -> tuple[str, Any, str | None]:
     if c['version'] != row['concept_version']:
         return 'unavailable', None, 'concept_version_changed'
     row = {**row, 'grade': content_grade(c, row['grade'])}
-    data = grounding(db, row["concept_id"], row["grade"], row["topic"])
+    data = _im_budget(grounding(db, row["concept_id"], row["grade"], row["topic"]))
     extra = ("## Format des Abnehmers\n### Register erlaubter Darstellungen\n```json\n" + compact(spec["registry"])
              + "\n```\n### Formatregeln des Abnehmers\n" + (spec["instructions"] or "(keine)"))
     initial = None
