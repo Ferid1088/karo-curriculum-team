@@ -637,7 +637,7 @@ def test_grundlage_budget_misst_den_festen_teil():
     system = agents.system_laenge("lektionsautor", spec["schema"], extra)
     wrapper = len("## Auftrag\n\n## Daten\n```json\n\n```")
     assert budget == 29_500 - (1_000 + system + 150 + 2_000 + wrapper
-                               + lessons._FEEDBACK_RESERVE)
+                               + lessons._RETRY_RESERVE)
     # Und ein Anbieter ohne Grenze bekommt den Rueckfall.
     prov2 = _Aufzeichner(native=True)
     pipe2 = SimpleNamespace(agents=_runner(prov2))

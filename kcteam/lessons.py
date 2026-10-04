@@ -597,8 +597,9 @@ _GROUNDING_BUDGET = 6_000
 #: Anbieter meldet sie ehrlich als zu gross.
 _GRUNDLAGE_MINIMUM = 1_500
 
-#: Reserve fuer Rueckmeldungen bei Nachfragen, die den Auftrag wachsen lassen.
-_FEEDBACK_RESERVE = 2_000
+#: Reserve fuer den Wiederholungs-Anhang: bei einem ungueltigen Ergebnis
+#: haengt der Runner die letzte Fehlermeldung (bis 1.500 Zeichen) an.
+_RETRY_RESERVE = 1_700
 
 
 def _grundlage_budget(pipe, spec: dict, extra: str, task: str, feedback: str | None) -> int:
@@ -618,7 +619,7 @@ def _grundlage_budget(pipe, spec: dict, extra: str, task: str, feedback: str | N
             + pipe.agents.system_laenge("lektionsautor", spec["schema"], extra)
             + len(task) + len(feedback or "")
             + len("## Auftrag\n\n## Daten\n```json\n\n```")
-            + _FEEDBACK_RESERVE)
+            + _RETRY_RESERVE)
     return max(_GRUNDLAGE_MINIMUM, limit - fest)
 
 
@@ -711,9 +712,14 @@ def generate(pipe, db, row: dict) -> tuple[str, Any, str | None]:
         return obj
 
     def produce(fb, _verdict):
+        # Rueckmeldung macht den Auftrag laenger — mit jedem Versuch wird
+        # das Budget neu gemessen, sonst kippt genau der zweite Anlauf
+        # ueber die Anbietergrenze (zweimal live geschehen, EXP-201/204).
+        nutzdaten = (_im_budget(data, _grundlage_budget(pipe, spec, extra, task, fb))
+                     if fb else data)
         return pipe.agents.call_json(
             "lektionsautor", task,
-            data, spec["schema"], validate, entity_id=eid, feedback=fb, extra_system=extra, stage="lesson",
+            nutzdaten, spec["schema"], validate, entity_id=eid, feedback=fb, extra_system=extra, stage="lesson",
             meta={"concept": c["id"], "format": spec["id"], "export": row["id"],
                   "json_schema": spec["schema"], "registry": spec["registry"]})
 
