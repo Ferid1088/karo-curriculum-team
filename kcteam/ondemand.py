@@ -123,6 +123,13 @@ class CurriculumAgent:
         self.cfg, self.provider, self.db, self.karo_spec, self.log = cfg, provider, db, karo_spec, log
         oc = (cfg.raw.get("ondemand") or {}) if hasattr(cfg, "raw") else {}
         self.poll = float(oc.get("poll_seconds", 30))
+        # SIGTERM muss durchkommen: ein notifies(timeout=30) wuerde das
+        # Signalhandling um den Rest des Intervalls bremsen (PEP 475). Der
+        # Wait wird deshalb in kurzen Scheiben gefahren, die `stop` sehen.
+        self.wake_slice = float(oc.get("notify_slice_seconds", 1.0))
+        # Wie lange `serve` dem Lektions-Worker beim Runterfahren noch gibt.
+        self.worker_shutdown_timeout = float(
+            oc.get("worker_shutdown_timeout_seconds", 30))
         self.max_attempts = int(oc.get("max_attempts", 3))
         self.fast_lane = bool(oc.get("fast_lane", True))
         self.prefetch_next = int(oc.get("prefetch_next", 1))
@@ -161,12 +168,27 @@ class CurriculumAgent:
                     pass
                 if once:
                     return
-                for _ in listen.notifies(timeout=self.poll, stop_after=1):
-                    pass
+                rest = self.poll
+                while not self.stop.is_set() and rest > 0:
+                    # Kurze Scheiben: `stop` wirkt spaetestens nach
+                    # `wake_slice` Sekunden, nicht erst nach `poll` Sekunden.
+                    for _ in listen.notifies(timeout=min(self.wake_slice, rest),
+                                             stop_after=1):
+                        pass
+                    rest -= self.wake_slice
         finally:
             listen.close()
             if disp:
                 disp.shutdown()
+            if worker is not None:
+                # Begrenzt warten: der Worker soll seinen laufenden Export
+                # sauber ablegen; haengt er, reisst ihn `daemon` mit —
+                # der Auftrag bleibt ohnehin in der Warteschlange.
+                worker.join(timeout=self.worker_shutdown_timeout)
+                if worker.is_alive():
+                    self.log(f"⚠ Lektions-Worker endete nicht innerhalb von "
+                             f"{self.worker_shutdown_timeout}s — Auftrag bleibt "
+                             "in der Warteschlange")
 
     def _export_loop(self) -> None:
         """Lektions-Worker: Wartende an fertige Konzepte hängen und Lektionen schreiben (alle 2 s)."""

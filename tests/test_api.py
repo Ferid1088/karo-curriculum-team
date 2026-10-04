@@ -68,7 +68,9 @@ def lesson_body(**kw):
 
 def test_auth_required(env):
     api = env["api"]
-    assert api.get("/health").json() == {"status": "ok"}
+    gesund = api.get("/health").json()
+    assert gesund["status"] == "ok" and gesund["service"] == "kcteam-api"
+    assert "git_sha" in gesund and "environment" in gesund
     assert api.post("/v1/resolve", json={"subject": "Mathematik", "grade": 6, "topic": "x"}).status_code == 401
     assert api.post("/v1/resolve", json={"subject": "Mathematik", "grade": 6, "topic": "x"},
                     headers=h("kc_falsch")).status_code == 401
@@ -818,3 +820,73 @@ def test_wirkungsmeldung_braucht_einen_schluessel(env):
     assert api.post("/v1/explanations/feedback",
                     json={"format": "karo-adaptiv-v1", "befunde": [{"konzept_key": "X"}]}
                     ).status_code in (401, 403)
+
+
+# ---------------- Client-Schlüssel-Lifecycle ----------------
+def test_rotation_alter_schluessel_sofort_ungueltig_neuer_gilt(env):
+    """Revoke+Rotate-Lifecycle: der alte Schlüssel stirbt sofort, der neue
+    gehört derselben `client_id` — laufende Aufträge bleiben zugeordnet."""
+    from kcteam.api import add_client, list_clients, rotate_client
+    api, db = env["api"], env["db"]
+    row, alt = add_client(db, "rotations-test", "familie")
+    assert api.get("/v1/gap-report", headers=h(alt)).status_code == 200
+
+    neu_row, neu = rotate_client(db, "rotations-test")
+    assert neu_row["id"] == row["id"] and neu != alt and neu.startswith("kc_")
+
+    assert api.get("/v1/gap-report", headers=h(alt)).status_code == 401
+    assert api.get("/v1/gap-report", headers=h(neu)).status_code == 200
+
+    eintrag = next(c for c in list_clients(db) if c["name"] == "rotations-test")
+    assert eintrag["status"] == "active" and eintrag["rotated_at"] is not None
+    # Der Klartext steht nirgends: nur Präfix und Hash.
+    assert eintrag["key_prefix"] == neu[:10]
+    roh = db.one("SELECT key_hash FROM curriculum.api_clients WHERE id=%s", (row["id"],))
+    assert roh["key_hash"] != neu
+
+
+def test_revoke_setzt_zeitpunkt_und_sperrt_sofort(env):
+    from kcteam.api import add_client, list_clients, revoke_client
+    api, db = env["api"], env["db"]
+    _, key = add_client(db, "revoke-test", "schule")
+    assert api.get("/v1/gap-report", headers=h(key)).status_code == 200
+
+    assert revoke_client(db, "revoke-test")
+    assert api.get("/v1/gap-report", headers=h(key)).status_code == 401
+
+    eintrag = next(c for c in list_clients(db) if c["name"] == "revoke-test")
+    assert eintrag["status"] == "revoked" and eintrag["revoked_at"] is not None
+
+    # Rotation befreit auch einen gesperrten Schlüssel — bewusste Aktion.
+    from kcteam.api import rotate_client
+    _, neu = rotate_client(db, "revoke-test")
+    assert api.get("/v1/gap-report", headers=h(neu)).status_code == 200
+
+
+def test_rotation_unbekannter_name_scheitert_leise(env):
+    from kcteam.api import rotate_client
+    assert rotate_client(env["db"], "gibts-nicht") == (None, None)
+
+
+def test_health_meldet_service_sha_und_umgebung(env, monkeypatch):
+    from kcteam import version
+    monkeypatch.setattr(version, "GIT_SHA", "test-sha-123")
+    monkeypatch.setenv("APP_ENV", "test")
+    r = env["api"].get("/health")
+    assert r.status_code in (200, 503)
+    body = r.json()
+    assert body["service"] == "kcteam-api"
+    assert body["git_sha"] == "test-sha-123"
+    assert body["environment"] == "test"
+
+
+def test_gap_report_trennt_serving_und_pipeline(env):
+    """serving_ok misst die bediente Seite, pipeline_complete das Backlog —
+    ein ausstehender Lektions-Bau darf das Servieren nicht als kaputt melden."""
+    from kcteam.gap_report import curriculum_gap_report
+    bericht = curriculum_gap_report(env["db"])
+    s = bericht["summary"]
+    assert "serving_ok" in s and "pipeline_complete" in s
+    assert "missing_serving_material" in s and "backlog_material" in s
+    p = bericht["pending"]
+    assert "pending_optional_material" in p and "backlog_graph_gaps" in p

@@ -208,21 +208,49 @@ def curriculum_gap_report(db) -> dict:
     for k in konzept_luecken:
         subjects[k["subject_code"]]["with_gaps"] += 1
 
-    # `ok` misst die bediente Seite: jeder bedienbare Pfad endet an einem
-    # freigegebenen Fuß und jedes freigegebene Konzept hat vollstaendigen
-    # Inhalt. Backlog (nicht freigegeben) und noch nicht gebaute Lektionen
-    # sind der ehrliche Rest — sie stehen im Bericht, sind aber keine
-    # Brucche im Bedienten.
+    # Drei ehrliche Signale statt einem „ok", das nicht sagt, was es meint:
+    #
+    #   serving_ok        — kann der Dienst ausliefern, was Kinder sehen?
+    #                       Jeder freigegebene Graphpfad endet an einem
+    #                       freigegebenen Fuß, jedes freigegebene Konzept
+    #                       hat bedienbaren Inhalt.
+    #   pipeline_complete — ist die Erzeugung durch, also auch das Backlog
+    #                       leer und keine Lektion mehr ausstehend?
+    #   ok                — Alias fuer serving_ok (Rueckwaertskompatibilitaet).
+    #
+    # Dazu gehoert die Klassifizierung des Ausstehenden:
+    #   missing_serving_material  freigegeben, aber Inhalt bricht (Luecke
+    #                             jenseits „Lektion noch nicht geschrieben")
+    #   pending_optional_material freigegeben und nutzbar, Lektion baut der
+    #                             Worker bei erster Anfrage
+    #   backlog_material          noch nicht freigegeben (Pipeline laeuft)
+    def _serving_bruch(g: dict) -> bool:
+        if g["type"] == "cycle":
+            return any((konzepte.get(i) or {}).get("status") == "approved"
+                       for i in g["detail"].split(" → "))
+        return (konzepte.get(g.get("concept_id") or "") or {}
+                ).get("status") == "approved"
+
     ausstehend = [k for k in konzept_luecken
                   if k["status"] == "approved" and k["gaps"] == [_PENDING_LEKTION]]
-    brueche = [k for k in konzept_luecken
+    fehlend = [k for k in konzept_luecken
                if k["status"] == "approved" and k not in ausstehend]
+    backlog = [k for k in konzept_luecken if k["status"] != "approved"]
+    serving_luecken = [g for g in graph_luecken if _serving_bruch(g)]
+    backlog_luecken = [g for g in graph_luecken if not _serving_bruch(g)]
 
+    serving_ok = not fehlend and not serving_luecken
     return {
         "subjects": subjects,
         "graph_gaps": graph_luecken,
         "concept_gaps": konzept_luecken,
         "pending_lessons": [k["concept_id"] for k in ausstehend],
+        "pending": {
+            "missing_serving_material": [k["concept_id"] for k in fehlend],
+            "pending_optional_material": [k["concept_id"] for k in ausstehend],
+            "backlog_material": [k["concept_id"] for k in backlog],
+            "backlog_graph_gaps": backlog_luecken,
+        },
         "summary": {
             "concepts": len(konzepte),
             "approved": sum(1 for c in konzepte.values()
@@ -232,7 +260,11 @@ def curriculum_gap_report(db) -> dict:
             "concepts_with_gaps": len(konzept_luecken),
             "pending_lessons": len(ausstehend),
             "graph_gaps": len(graph_luecken),
-            "ok": not brueche and not graph_luecken,
+            "missing_serving_material": len(fehlend),
+            "backlog_material": len(backlog),
+            "serving_ok": serving_ok,
+            "pipeline_complete": not konzept_luecken and not graph_luecken,
+            "ok": serving_ok,
         },
     }
 
@@ -256,10 +288,10 @@ def format_report(report: dict) -> str:
             for luecke in k["gaps"]:
                 zeilen.append(f"      - {luecke}")
     s = report["summary"]
-    if s["ok"]:
-        zeilen.append("\n✓ Der bediente Katalog ist lückenlos.")
-        if s.get("pending_lessons") or s.get("backlog"):
-            zeilen.append(f"  ({s['pending_lessons']} Lektionen stehen "
-                          f"noch aus, {s['backlog']} Konzepte im Backlog — "
-                          f"siehe Konzeptliste.)")
+    zeilen.append(f"\nserving_ok:        {'✓' if s['serving_ok'] else '✗'}"
+                  f"  ({s['missing_serving_material']} freigegebene mit Lücken, "
+                  f"{len(report['pending']['backlog_graph_gaps'])} Backlog-Graphlücken)")
+    zeilen.append(f"pipeline_complete: {'✓' if s['pipeline_complete'] else '✗'}"
+                  f"  ({s['pending_lessons']} Lektionen ausstehend, "
+                  f"{s['backlog_material']} Konzepte im Backlog)")
     return "\n".join(zeilen)

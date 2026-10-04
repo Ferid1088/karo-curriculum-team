@@ -57,12 +57,35 @@ def add_client(db, name: str, tenant: str, webhook_url: str | None = None,
 
 
 def list_clients(db) -> list[dict]:
-    return db.query("""SELECT id, name, tenant, key_prefix, webhook_url IS NOT NULL AS webhook, active, created_at,
-                              last_used_at FROM curriculum.api_clients ORDER BY id""")
+    return db.query("""SELECT id, name, tenant, key_prefix, webhook_url IS NOT NULL AS webhook,
+                              CASE WHEN revoked_at IS NOT NULL THEN 'revoked'
+                                   WHEN active THEN 'active' ELSE 'inactive' END AS status,
+                              created_at, last_used_at, revoked_at, rotated_at
+                         FROM curriculum.api_clients ORDER BY id""")
 
 
 def revoke_client(db, name: str) -> bool:
-    return bool(db.query("UPDATE curriculum.api_clients SET active=false WHERE name=%s RETURNING id", (name,)))
+    """Schlüssel außer Kraft setzen: sofort ungültig, der Zeitpunkt wird festgehalten."""
+    return bool(db.query("""UPDATE curriculum.api_clients
+                               SET active=false, revoked_at=now()
+                             WHERE name=%s RETURNING id""", (name,)))
+
+
+def rotate_client(db, name: str) -> tuple[dict | None, str | None]:
+    """Neuer Schlüssel für denselben Abnehmer — der alte ist ab sofort ungültig.
+
+    Der neue Schlüssel wird nur hier einmal zurückgegeben und nie gespeichert.
+    Die Zeile behält Name, Mandant und Webhook: laufende Aufträge und
+    Idempotenz-Schlüssel bleiben demselben `client_id` zugeordnet.
+    """
+    key = KEY_PREFIX + secrets.token_urlsafe(32)
+    row = db.one("""UPDATE curriculum.api_clients
+                       SET key_hash=%s, key_prefix=%s, active=true,
+                           revoked_at=NULL, rotated_at=now()
+                     WHERE name=%s
+                 RETURNING id, name, tenant, key_prefix""",
+                 (hash_key(key), key[:10], name))
+    return row, (key if row else None)
 
 
 # ---------------------------------------------------------------- Eingaben
@@ -162,7 +185,8 @@ def create_app(db: DB | None = None, webhooks: bool = False) -> FastAPI:
         if not authorization or not authorization.lower().startswith("bearer "):
             raise HTTPException(401, "Authorization: Bearer <Schlüssel> fehlt",
                                 headers={"WWW-Authenticate": "Bearer"})
-        row = get_db().one("SELECT id, name, tenant FROM curriculum.api_clients WHERE key_hash=%s AND active",
+        row = get_db().one("""SELECT id, name, tenant FROM curriculum.api_clients
+                              WHERE key_hash=%s AND active AND revoked_at IS NULL""",
                            (hash_key(authorization[7:].strip()),))
         if not row:
             raise HTTPException(401, "Schlüssel unbekannt oder gesperrt", headers={"WWW-Authenticate": "Bearer"})
@@ -205,8 +229,12 @@ def create_app(db: DB | None = None, webhooks: bool = False) -> FastAPI:
         try:
             get_db().one("SELECT 1 AS ok")
         except Exception as exc:  # noqa: BLE001
-            return JSONResponse({"status": "down", "error": type(exc).__name__}, 503)
-        return {"status": "ok"}
+            return JSONResponse({"status": "down", "service": "kcteam-api",
+                                 "git_sha": version.GIT_SHA,
+                                 "error": type(exc).__name__}, 503)
+        return {"status": "ok", "service": "kcteam-api",
+                "git_sha": version.GIT_SHA,
+                "environment": os.environ.get("APP_ENV", "production")}
 
     # ------------------------------------------------------------ Themen
     def _resolve(c: dict, body: ResolveIn | LessonIn) -> dict:

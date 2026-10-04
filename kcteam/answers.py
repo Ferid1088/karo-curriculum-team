@@ -77,8 +77,9 @@ class RubricCriterion(BaseModel):
 
 
 class AnswerFreeText(BaseModel):
-    """Offene Antwort (Schreiben, Begründen). Nicht automatisch prüfbar: Karo bewertet per KI oder Lehrkraft
-    anhand des Rasters und meldet das Ergebnis zurück."""
+    """Offene Antwort ohne lokale Regel. Nicht automatisch prüfbar: Karo bewertet extern
+    (Lehrkraft/Redaktion) anhand des Rasters und meldet das Ergebnis zurück.
+    Für lokal prüfbare Erklärungen stattdessen `concept_rubric` verwenden."""
     type: Literal["free_text"]
     rubric: list[RubricCriterion] = Field(min_length=1, max_length=8)
     pass_points: int = Field(ge=1)
@@ -92,11 +93,72 @@ class AnswerFreeText(BaseModel):
         return self
 
 
+class ConceptSpec(BaseModel):
+    """Ein gefordertes Konzept: kanonische Formulierung + akzeptierte Ausdrucksvarianten.
+
+    `accepted` trägt die semantischen Varianten, die das Curriculum explizit
+    freigibt (Synonyme, Umstellungen) — die Laufzeit erfindet keine dazu.
+    """
+    concept: str = Field(max_length=300)
+    accepted: list[str] = Field(default_factory=list, max_length=10,
+                                description="gleichwertige Ausdrucksformen")
+    key: str | None = Field(None, max_length=40)
+    hint: str | None = Field(None, max_length=300,
+                             description="gezielte Nachhilfe, wenn genau dieses Konzept fehlt")
+
+
+class MisconceptionSpec(BaseModel):
+    """Typische Fehlvorstellung: Formulierungen, die sie verraten.
+
+    Ein Treffer schlägt jede noch so vollständige Antwort — „richtiger Kern
+    plus Fehlvorstellung" ist ein Widerspruch, kein Treffer.
+    """
+    patterns: list[str] = Field(min_length=1, max_length=10)
+    misconception: str | None = Field(None, max_length=60,
+                                      description="Key der Fehlvorstellung (F1 …)")
+    feedback: str | None = Field(None, max_length=300)
+
+
+class ClarificationTask(BaseModel):
+    """UNKNOWN → deterministisch bewertbare Folgeaufgabe (kein Runtime-AI):
+    „Welche Aussage meinst du?" als Auswahl."""
+    prompt: str = Field(max_length=500)
+    options: list[ChoiceOption] = Field(min_length=2, max_length=6)
+
+    @model_validator(mode="after")
+    def _check(self):
+        if not any(o.correct for o in self.options):
+            raise ValueError("clarification: mindestens eine Option muss correct=true sein")
+        return self
+
+
+class AnswerConceptRubric(BaseModel):
+    """Lokal prüfbarer Freitext: Begriffsabdeckung statt Stringvergleich.
+
+    correct (alle bzw. `min_required` Konzepte) · partial (`partial_min`
+    Treffer) · misconception (bekannte Fehlvorstellung, Vorrang vor Treffern)
+    · unknown (nichts Einzuordnendes → `clarification`, niemals falsch).
+    """
+    type: Literal["concept_rubric"]
+    required_concepts: list[ConceptSpec | str] = Field(min_length=1, max_length=8)
+    optional_concepts: list[ConceptSpec | str] = Field(default_factory=list, max_length=6)
+    min_required: int | None = Field(None, ge=1,
+                                     description="Schwelle für 'correct'; fehlt: alle")
+    partial_min: int = Field(1, ge=1,
+                             description="ab so vielen Treffern gilt 'partial'")
+    misconceptions: list[MisconceptionSpec] = Field(default_factory=list, max_length=8)
+    clarification: ClarificationTask | None = None
+    sample_answer: str | None = Field(None, max_length=1500)
+    max_words: int | None = None
+
+
 AnswerSpec = Annotated[
-    Union[AnswerNumber, AnswerFraction, AnswerChoice, AnswerText, AnswerOrder, AnswerMatch, AnswerMark, AnswerFreeText],
+    Union[AnswerNumber, AnswerFraction, AnswerChoice, AnswerText, AnswerOrder,
+          AnswerMatch, AnswerMark, AnswerFreeText, AnswerConceptRubric],
     Field(discriminator="type"),
 ]
-AUTO_CHECKABLE = {"number", "fraction", "choice", "text", "order", "match", "mark"}
+AUTO_CHECKABLE = {"number", "fraction", "choice", "text", "order", "match", "mark",
+                  "concept_rubric"}
 
 
 class Distractor(BaseModel):

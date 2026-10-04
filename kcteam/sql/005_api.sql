@@ -12,8 +12,15 @@ CREATE TABLE IF NOT EXISTS curriculum.api_clients (
     webhook_secret text,
     active         boolean NOT NULL DEFAULT true,
     created_at     timestamptz NOT NULL DEFAULT now(),
-    last_used_at   timestamptz
+    last_used_at   timestamptz,
+    -- Lebenszyklus: wann wurde der Schlüssel außer Kraft gesetzt bzw. das
+    -- letzte Mal ausgetauscht. Der Schlüssel selbst bleibt wie immer nur
+    -- gehasht; diese Daten zeichnen nur auf, WAS wann passiert ist.
+    revoked_at     timestamptz,
+    rotated_at     timestamptz
 );
+ALTER TABLE curriculum.api_clients ADD COLUMN IF NOT EXISTS revoked_at timestamptz;
+ALTER TABLE curriculum.api_clients ADD COLUMN IF NOT EXISTS rotated_at timestamptz;
 
 CREATE TABLE IF NOT EXISTS curriculum.api_idempotency (
     client_id   int NOT NULL REFERENCES curriculum.api_clients(id) ON DELETE CASCADE,

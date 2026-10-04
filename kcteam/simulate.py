@@ -28,6 +28,13 @@ def correct_answer(answer: dict) -> Any:
         return answer["items"]
     if t == "match":
         return answer["pairs"]
+    if t == "concept_rubric":
+        # Alle geforderten Konzepte nennen — optional dazu, wie ein gutes Kind.
+        parts = [c if isinstance(c, str) else c["concept"]
+                 for c in answer["required_concepts"]]
+        parts += [c if isinstance(c, str) else c["concept"]
+                  for c in answer.get("optional_concepts") or []]
+        return " ".join(parts)
     return None
 
 
@@ -41,6 +48,11 @@ def wrong_answer(answer: dict) -> Any:
     if t == "match":
         pairs = answer["pairs"]
         return [[pairs[i][0], pairs[(i + 1) % len(pairs)][1]] for i in range(len(pairs))]
+    if t == "concept_rubric":
+        # Ein schwaches Kind nennt ein Stueck Wahrheit — das ist 'partial',
+        # nicht 'unknown'. Ohne Konzepte gar nichts Belastbares sagen.
+        first = answer["required_concepts"][0]
+        return first if isinstance(first, str) else first["concept"]
     return "999999"
 
 
@@ -53,6 +65,10 @@ def misconception_answer(item: dict) -> Any:
         for i, o in enumerate(a["options"]):
             if o.get("misconception"):
                 return i
+    if a["type"] == "concept_rubric":
+        for m in a.get("misconceptions") or []:
+            if m.get("patterns"):
+                return m["patterns"][0]
     return wrong_answer(a)
 
 

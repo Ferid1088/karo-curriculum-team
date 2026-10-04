@@ -9,6 +9,8 @@
 -- Regeln: Beherrscht das Kind ein Konzept, gelten alle seine Voraussetzungen als beherrscht. Scheitert es, werden
 -- die direkten Voraussetzungen geprüft – bei Bedarf bis Klasse 1. Ziele werden immer geprüft.
 -- Freitext: needs_review, später karo.review_response (Rolle karo_reviewer).
+-- concept_rubric dagegen ist lokal prüfbar: Begriffsabdeckung ergibt
+-- correct / partial / misconception / unknown (unknown -> clarification, nie falsch).
 -- Datenschutz: pseudonyme Kennung, keine Namen; karo.forget_learner löscht alles zu einem Kind,
 -- karo.purge_learner_data löscht alte Sitzungen, Lernstände und inaktive Kennungen.
 
@@ -72,7 +74,7 @@ CREATE TABLE IF NOT EXISTS learner.responses (
 );
 ALTER TABLE learner.responses DROP CONSTRAINT IF EXISTS responses_outcome_check;
 ALTER TABLE learner.responses ADD CONSTRAINT responses_outcome_check
-    CHECK (outcome IN ('correct','incorrect','misconception','partial','skipped','needs_review'));
+    CHECK (outcome IN ('correct','incorrect','misconception','partial','skipped','needs_review','unknown'));
 CREATE INDEX IF NOT EXISTS responses_session_idx ON learner.responses(session_id, concept_id);
 CREATE UNIQUE INDEX IF NOT EXISTS responses_session_item_idx ON learner.responses(session_id, item_id);
 CREATE INDEX IF NOT EXISTS responses_learner_concept_idx ON learner.responses(learner_id, concept_id);
@@ -193,6 +195,12 @@ DECLARE
     tol  numeric;
     m    text[];
     gv   text[];
+    gnorm text;
+    hits int; nreq int;
+    rc   record;
+    ctext text;
+    hit  boolean;
+    missing jsonb;
     empty boolean;
 BEGIN
     SELECT i.* INTO it FROM curriculum.items i
@@ -270,6 +278,69 @@ BEGIN
             WHERE (ord - 1)::int = ANY (sel) AND o->>'misconception' IS NOT NULL
             ORDER BY ord LIMIT 1;
         END IF;
+    ELSIF t = 'concept_rubric' THEN
+        -- Lokale Begriffsabdeckung: ein required concept zaehlt, wenn er oder
+        -- eine seiner `accepted`-Varianten als eigene Wortgruppe vorkommt.
+        -- Fehlvorstellungen gehen vor: richtiger Kern plus Fehlvorstellung ist
+        -- ein Widerspruch, kein Treffer. Nichts Treffbares ist 'unknown' —
+        -- niemals 'incorrect'.
+        gnorm := ' ' || karo._norm_text(gt) || ' ';
+        SELECT mc->>'misconception', mc->>'feedback' INTO mk, fb
+          FROM jsonb_array_elements(coalesce(a->'misconceptions', '[]'::jsonb)) mc
+         WHERE EXISTS (SELECT 1 FROM jsonb_array_elements_text(mc->'patterns') p
+                       WHERE position(' ' || karo._norm_text(p) || ' ' IN gnorm) > 0)
+         LIMIT 1;
+        IF FOUND THEN
+            RETURN QUERY SELECT 'misconception'::text,
+                CASE WHEN mk LIKE '%.%' THEN upper(mk)
+                     WHEN mk IS NOT NULL THEN it.concept_id || '.' || upper(mk)
+                     ELSE NULL END,
+                0::numeric, fb;
+            RETURN;
+        END IF;
+        hits := 0; nreq := 0; missing := '[]'::jsonb;
+        FOR rc IN SELECT * FROM jsonb_array_elements(a->'required_concepts') LOOP
+            nreq := nreq + 1;
+            ctext := CASE WHEN jsonb_typeof(rc.value) = 'string' THEN rc.value #>> '{}'
+                          ELSE rc.value->>'concept' END;
+            hit := EXISTS (
+                SELECT 1 FROM (
+                    SELECT ctext AS v
+                    UNION ALL
+                    SELECT v FROM jsonb_array_elements_text(
+                        CASE WHEN jsonb_typeof(rc.value) = 'object'
+                             THEN coalesce(rc.value->'accepted', '[]'::jsonb)
+                             ELSE '[]'::jsonb END) v) x
+                WHERE x.v IS NOT NULL
+                  AND position(' ' || karo._norm_text(x.v) || ' ' IN gnorm) > 0);
+            IF hit THEN
+                hits := hits + 1;
+            ELSE
+                missing := missing || jsonb_build_object(
+                    'concept', ctext,
+                    'hint', CASE WHEN jsonb_typeof(rc.value) = 'object'
+                                 THEN rc.value->>'hint' END);
+            END IF;
+        END LOOP;
+        IF nreq = 0 THEN
+            RETURN QUERY SELECT 'needs_review'::text, NULL::text, NULL::numeric, NULL::text; RETURN;
+        END IF;
+        IF hits >= coalesce((a->>'min_required')::int, nreq) THEN
+            RETURN QUERY SELECT 'correct'::text, NULL::text, 1::numeric, NULL::text; RETURN;
+        END IF;
+        IF hits >= greatest(1, coalesce((a->>'partial_min')::int, 1)) THEN
+            fb := coalesce((SELECT string_agg(mv->>'hint', ' ')
+                            FROM jsonb_array_elements(missing) mv
+                            WHERE mv->>'hint' IS NOT NULL AND mv->>'hint' <> ''),
+                    'Es fehlt noch: ' || (SELECT string_agg(mv->>'concept', '; ')
+                            FROM jsonb_array_elements(missing) mv));
+            RETURN QUERY SELECT 'partial'::text, NULL::text,
+                                hits::numeric / nreq, fb;
+            RETURN;
+        END IF;
+        RETURN QUERY SELECT 'unknown'::text, NULL::text, 0::numeric,
+                            (a->'clarification'->>'prompt');
+        RETURN;
     ELSIF t = 'order' THEN
         ok := jsonb_typeof(g) = 'array' AND jsonb_array_length(g) = jsonb_array_length(a->'items')
               AND NOT EXISTS (SELECT 1 FROM jsonb_array_elements_text(g) WITH ORDINALITY x(v, i)
@@ -331,7 +402,17 @@ AS $$
             WHEN 'order' THEN '["erster", "zweiter", ...]'
             WHEN 'match' THEN '[["links", "rechts"], ...]'
             WHEN 'free_text' THEN '{"text": "..."}'
+            WHEN 'concept_rubric' THEN '{"text": "..."}'
             ELSE '"Antwort als Text"' END,
+        'clarification', CASE WHEN i.answer->>'type' = 'concept_rubric'
+            AND i.answer->'clarification' IS NOT NULL THEN
+            jsonb_build_object(
+                'prompt', i.answer->'clarification'->>'prompt',
+                'choices', (SELECT jsonb_agg(jsonb_build_object('index', ord - 1, 'text', o->>'text')
+                                             ORDER BY ord)
+                            FROM jsonb_array_elements(i.answer->'clarification'->'options')
+                            WITH ORDINALITY e(o, ord)))
+            END,
         'choices', CASE WHEN i.answer->>'type' = 'choice' THEN
                      (SELECT jsonb_agg(jsonb_build_object('index', ord - 1, 'text', o->>'text') ORDER BY ord)
                       FROM jsonb_array_elements(i.answer->'options') WITH ORDINALITY e(o, ord)) END,
@@ -373,7 +454,7 @@ LANGUAGE sql STABLE AS $$
                count(*) FILTER (WHERE r.item_level = 'below' AND (r.outcome IN ('incorrect', 'misconception')
                                 OR (r.outcome = 'skipped' AND pol.skipped_counts_as_incorrect))) AS ib,
                count(*) FILTER (WHERE r.outcome = 'misconception' AND r.item_level = 'target') AS mis,
-               count(*) FILTER (WHERE r.outcome <> 'needs_review') AS n,
+               count(*) FILTER (WHERE r.outcome NOT IN ('needs_review', 'unknown')) AS n,
                count(*) FILTER (WHERE r.outcome = 'needs_review') AS pend
         FROM learner.responses r, pol
         WHERE r.session_id = p_session AND r.concept_id = ANY (p_concepts)
@@ -562,7 +643,7 @@ LANGUAGE sql VOLATILE AS $$
     INSERT INTO learner.mastery(learner_id, concept_id, state, evidence, misconceptions, updated_at)
     SELECT s.learner_id, st.concept_id, st.state,
            (SELECT count(*) FROM learner.responses r WHERE r.learner_id = s.learner_id AND r.concept_id = st.concept_id
-              AND r.outcome <> 'needs_review')::int,
+              AND r.outcome NOT IN ('needs_review', 'unknown'))::int,
            coalesce((SELECT array_agg(DISTINCT r.misconception_id) FROM learner.responses r
                      WHERE r.session_id = p_session AND r.concept_id = st.concept_id
                        AND r.misconception_id IS NOT NULL), '{}'),

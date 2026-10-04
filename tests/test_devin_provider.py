@@ -42,9 +42,12 @@ class FakeHTTP:
     """
 
     def __init__(self, remote=None, queue=(), output_fn=None):
+        import itertools
         self.remote = remote if remote is not None else {}
         self.queue = list(queue)
         self.output_fn = output_fn
+        # Wie die echte API: eine vergessene Session-ID wird nie neu vergeben.
+        self._seq = itertools.count(1)
         self.calls: list[tuple] = []
         self.get_meta = lambda: {}      # TestDevin setzt hier das meta des laufenden Aufrufs
         self._lock = threading.Lock()
@@ -58,19 +61,24 @@ class FakeHTTP:
                     raise item
                 return item
             if method == "POST" and path == "/sessions":
-                sid = f"devin-{len(self.remote) + 1}"
+                sid = f"devin-{next(self._seq)}"
                 self.remote[sid] = {"status": "working", "out": None, "prompt": json["prompt"],
                                     "schema": json.get("structured_output_schema"),
                                     "meta": dict(self.get_meta()), "nudge": None}
                 return Resp(200, {"session_id": sid, "url": f"https://app.devin.ai/sessions/{sid}"})
             if method == "GET":
-                s = self.remote[path.rsplit("/", 1)[-1]]
+                s = self.remote.get(path.rsplit("/", 1)[-1])
+                if s is None:
+                    return Resp(404, {"detail": "unknown session"})
                 out = s["out"]
                 if s["status"] == "finished" and out is None and self.output_fn:
                     out = self.output_fn(s)
                 return Resp(200, {"status_enum": s["status"], "structured_output": out})
             if method == "POST" and path.endswith("/message"):
-                self.remote[path.split("/")[-2]]["nudge"] = json["message"]
+                sid = path.split("/")[-2]
+                if sid not in self.remote:
+                    return Resp(404, {"detail": "unknown session"})
+                self.remote[sid]["nudge"] = json["message"]
                 return Resp(200, {})
         raise AssertionError(f"unerwarteter Aufruf: {method} {path}")
 
@@ -203,6 +211,111 @@ def test_abgelaufene_session_wird_einmal_neu_gestartet():
     with pytest.raises(ProviderError) as exc:
         _call(p)                                        # keine zweite Chance
     assert exc.value.retryable is False
+
+
+# ------------------------------------------------------------ 404 = missing_remote
+def test_404_beim_ersten_poll_startet_neu_statt_zu_fehlern():
+    remote = {}
+    p = DevinFake({"max_session_restarts": 1}, remote=remote)
+    with pytest.raises(ProviderPending):
+        _call(p)
+    del remote["devin-1"]                        # die Gegenstelle hat sie vergessen
+    with pytest.raises(ProviderPending) as exc:
+        _call(p)                                 # kein Fail: bounded restart -> devin-2
+    assert "devin-2" in remote
+    assert exc.value.session_id == "devin-2"
+    assert len(p._http.posts()) == 2             # genau zwei Creates
+
+
+def test_404_nach_erfolgreichen_polls_startet_neu():
+    remote = {}
+    p = DevinFake({"max_session_restarts": 1}, remote=remote)
+    with pytest.raises(ProviderPending):
+        _call(p)
+    with pytest.raises(ProviderPending):
+        _call(p)                                 # mehrere erfolgreiche Polls
+    with pytest.raises(ProviderPending):
+        _call(p)
+    del remote["devin-1"]
+    with pytest.raises(ProviderPending):
+        _call(p)
+    assert "devin-2" in remote and len(p._http.posts()) == 2
+
+
+def test_404_restart_ist_begrenzt_und_faellt_dann_sauber():
+    remote = {}
+    p = DevinFake({"max_session_restarts": 1}, remote=remote)
+    with pytest.raises(ProviderPending):
+        _call(p)
+    del remote["devin-1"]
+    with pytest.raises(ProviderPending):
+        _call(p)                                 # restart -> devin-2
+    del remote["devin-2"]
+    with pytest.raises(ProviderError) as exc:
+        _call(p)                                 # Cap erreicht: dauerhafter Fehler
+    assert exc.value.retryable is False
+    assert len(p._http.posts()) == 2             # kein drittes Create
+
+
+def test_404_restart_ist_idempotent_keine_doppelsession():
+    remote = {}
+    p = DevinFake({"max_session_restarts": 2}, remote=remote)
+    with pytest.raises(ProviderPending):
+        _call(p)
+    del remote["devin-1"]
+    with pytest.raises(ProviderPending):
+        _call(p)                                 # restart -> devin-2
+    with pytest.raises(ProviderPending):
+        _call(p)                                 # gleicher Auftrag: poll, kein Create
+    with pytest.raises(ProviderPending):
+        _call(p)
+    assert len(p._http.posts()) == 2
+    assert set(remote) == {"devin-2"}            # genau eine aktive Session
+
+
+def test_404_beim_nudge_einer_blockierten_session():
+    remote = {}
+    p = DevinFake({"max_session_restarts": 1}, remote=remote)
+    with pytest.raises(ProviderPending):
+        _call(p)
+    remote["devin-1"]["status"] = "blocked"
+    del remote["devin-1"]                        # blockiert UND remote weg
+    with pytest.raises(ProviderPending):
+        _call(p)                                 # missing_remote -> restart
+    assert "devin-2" in remote and len(p._http.posts()) == 2
+
+
+def test_404_nach_fertigem_ergebnis_loest_keinen_neubau_aus():
+    """`finished` ist ein Endzustand: das lokale Ergebnis gilt, auch wenn
+    Devin die Session laengst entsorgt hat — kein zweiter Build."""
+    remote = {}
+    p = DevinFake({}, remote=remote)
+    with pytest.raises(ProviderPending):
+        _call(p)
+    remote["devin-1"].update(status="finished", out={"konzept_id": "X"})
+    comp = _call(p)
+    del remote["devin-1"]
+    again = _call(p)
+    assert again.text == comp.text
+    assert len(p._http.posts()) == 1             # genau ein Create, kein Neubau
+    gets = [c for c in p._http.calls if c[0] == "GET"]
+    assert len(gets) == 1                        # und kein zweiter Poll
+
+
+def test_404_nach_worker_neustart_wird_recovered():
+    """Worker-Neustart: ein NEUER Provider sieht denselben `remote`-Stand —
+    die lokale Session-Row (hier `_mem`, in Betrieb `provider_sessions`)
+    bleibt, die Remote ist weg: bounded restart, nicht zwei aktive."""
+    remote = {}
+    p1 = DevinFake({"max_session_restarts": 1}, remote=remote)
+    with pytest.raises(ProviderPending):
+        _call(p1)
+    p2 = DevinFake({"max_session_restarts": 1}, remote=remote)
+    p2._mem = p1._mem                            # „Datenbank“ überlebt den Worker
+    del remote["devin-1"]                        # remote ist die Session verloren
+    with pytest.raises(ProviderPending):
+        _call(p2)
+    assert len(remote) == 1 and len(p2._http.posts()) == 1
 
 
 def test_maximales_session_alter_begrenzt_warten():
@@ -362,16 +475,15 @@ def test_auftrag_wartet_bis_devin_fertig_ist(env):
 
     seen = set()
     for _ in range(200):
-        if not agent.process_next():
-            break
-        row = db.one("SELECT status FROM curriculum.topic_requests WHERE id=%s", (rid,))
-        if row["status"] == "done":
-            break
         # Devin "arbeitet" zwischen zwei Worker-Läufen fertig
         for sid, s in prov._http.remote.items():
             if s["status"] == "working":
                 s["status"] = "finished"
                 seen.add(sid)
+        progressed = agent.process_next()
+        row = db.one("SELECT status FROM curriculum.topic_requests WHERE id=%s", (rid,))
+        if row["status"] == "done" and not progressed:
+            break
     st = db.one("SELECT status FROM curriculum.topic_requests WHERE id=%s", (rid,))
     assert st["status"] == "done"
 
@@ -381,7 +493,11 @@ def test_auftrag_wartet_bis_devin_fertig_ist(env):
                           WHERE provider='devin' AND session_id = ANY(%s)""",
                       (list(prov._http.remote),))
     assert len(sessions) == len(prov._http.remote)
-    assert all(s["status"] == "finished" for s in sessions)
+    # Keine Session ist dauerhaft kaputt. Eine darf noch „working" sein: sie
+    # wurde angelegt, nachdem der Auftrag das Ergebnis nicht mehr brauchte —
+    # der nächste Lauf pollt sie aus derselben Zeile weiter (Recovery).
+    assert all(s["status"] in ("finished", "working") for s in sessions)
+    assert sum(s["status"] == "finished" for s in sessions) >= len(sessions) - 1
     # jedes erzeugte Ergebnis wurde verarbeitet und geloggt
     assert db.one("SELECT 1 AS x FROM curriculum.agent_calls WHERE provider='devin' "
                   "AND role='curriculum_agent'")

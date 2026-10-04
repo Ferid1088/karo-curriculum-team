@@ -641,7 +641,7 @@ def cmd_api(cfg, args) -> int:
 
 
 def cmd_api_client(cfg, args) -> int:
-    from .api import add_client, list_clients, revoke_client
+    from .api import add_client, list_clients, revoke_client, rotate_client
     db = DB(cfg.database_url)
     db.migrate()
     if args.action == "add":
@@ -655,10 +655,19 @@ def cmd_api_client(cfg, args) -> int:
         print("  In Karo: KARO_CURRICULUM_KEY=<Schlüssel> setzen.")
     elif args.action == "revoke":
         print("✓ gesperrt" if revoke_client(db, args.name) else "✗ nicht gefunden")
+    elif args.action == "rotate":
+        row, key = rotate_client(db, args.name)
+        if not row:
+            print("✗ nicht gefunden")
+            return 1
+        print(f"✓ Abnehmer {row['name']} rotiert — der alte Schlüssel ist ab sofort ungültig.")
+        print(f"  Neuer Schlüssel (wird nur jetzt angezeigt): {key}")
+        print("  In Karo: KARO_CURRICULUM_KEY=<Schlüssel> aktualisieren.")
     else:
         for r in list_clients(db):
             print(f"#{r['id']:<3} {r['name']:20} {r['tenant']:16} {r['key_prefix']}…  "
-                  f"{'aktiv' if r['active'] else 'gesperrt':8} zuletzt: {r['last_used_at'] or '–'}")
+                  f"{r['status']:8} zuletzt: {r['last_used_at'] or '–'}"
+                  + (f" rotiert: {r['rotated_at']}" if r.get("rotated_at") else ""))
     return 0
 
 
@@ -792,7 +801,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--workers", type=int, default=int(os.environ.get("KCTEAM_API_WORKERS", "1")))
 
     p = sub.add_parser("api-client", help="Abnehmer (API-Schlüssel) verwalten")
-    p.add_argument("action", choices=["add", "list", "revoke"])
+    p.add_argument("action", choices=["add", "list", "revoke", "rotate"])
     p.add_argument("--name")
     p.add_argument("--tenant", help="Einrichtung (Tageslimit, Nachfrage); Standard: der Name")
     p.add_argument("--webhook", help="URL für Webhooks (optional)")

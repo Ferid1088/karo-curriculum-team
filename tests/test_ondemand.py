@@ -275,3 +275,115 @@ def test_postgres_rejects_a_fractional_interval_but_takes_the_cast():
         with conn.cursor() as cur:
             cur.execute("SELECT make_interval(mins => (2 ^ 3)::int)")
             assert cur.fetchone()[0].total_seconds() == 8 * 60
+
+
+# ---------------- Graceful Shutdown (ohne Datenbank) ----------------
+import threading
+import time
+
+
+class _FakeListen:
+    """Steht für die LISTEN-Verbindung: liefert nie Notifies, wartet aber
+    ehrlich `timeout` Sekunden — so wie der echte Treiber es täte."""
+
+    def __init__(self, agent_stop):
+        self._stop = agent_stop
+        self.closed = False
+
+    def execute(self, sql):
+        assert "LISTEN" in sql
+
+    def notifies(self, timeout=30, stop_after=None):
+        ende = time.monotonic() + timeout
+        while time.monotonic() < ende and not self._stop.is_set():
+            time.sleep(0.01)
+            yield from ()
+        return
+
+    def close(self):
+        self.closed = True
+
+
+class _FakeDB:
+    url = "postgresql://unused"
+
+    def requeue_stale_requests(self):
+        return 0
+
+
+def _agent_fake(tmp_cfg=None, **kw):
+    """Ein Agent ohne Datenbank — `serve` bekommt die Fake-Listen-Verbindung
+    und stubbe Auftragsarbeit. `kw` steuert ondemand-Einstellungen."""
+    from types import SimpleNamespace
+    from kcteam.ondemand import CurriculumAgent
+    cfg = SimpleNamespace(raw={"ondemand": {"poll_seconds": 30,
+                                            "notify_slice_seconds": 0.05,
+                                            "worker_shutdown_timeout_seconds": 0.5,
+                                            **kw}})
+    return CurriculumAgent(cfg=cfg, provider=None, db=_FakeDB(), log=lambda *_: None)
+
+
+def _patched_serve(agent, monkeypatch, process_next=lambda self: False):
+    """Baut die Umgebung für `serve` ohne Postgres: Fake-LISTEN, keine
+    echten Aufträge, kein Export-Heartbeat."""
+    import psycopg
+    from kcteam import lessons, ondemand
+    fake = _FakeListen(agent.stop)
+    monkeypatch.setattr(psycopg, "connect", lambda *a, **k: fake)
+    monkeypatch.setattr(lessons, "requeue_stale_exports", lambda *a, **k: 0)
+    monkeypatch.setattr(lessons, "promote_waiting", lambda *a, **k: None)
+    monkeypatch.setattr(type(agent), "process_next", process_next)
+    return fake
+
+
+def test_sigterm_bricht_idle_poll_sofort_ab(monkeypatch):
+    """`poll_seconds=30` darf den Shutdown nicht um 30 s bremsen: die
+    Wartezeit läuft in `notify_slice_seconds`-Scheiben, die `stop` sehen."""
+    agent = _agent_fake()
+    _patched_serve(agent, monkeypatch)
+    t = threading.Thread(target=agent.serve, daemon=True)
+    t0 = time.monotonic()
+    t.start()
+    time.sleep(0.15)                          # Agent ist in der Poll-Warte
+    agent.shutdown()
+    t.join(timeout=10)
+    dauer = time.monotonic() - t0
+    assert not t.is_alive()
+    assert dauer < 5, f"Shutdown brauchte {dauer:.1f}s — Slice greift nicht"
+
+
+def test_haengender_worker_bremst_shutdown_nur_bis_timeout(monkeypatch):
+    """Der Lektions-Worker bekommt `worker_shutdown_timeout_seconds`;
+    hängt er darüber hinaus, endet `serve` trotzdem — der Auftrag bleibt
+    in der Warteschlange (daemon-Thread)."""
+    agent = _agent_fake()
+    _patched_serve(agent, monkeypatch)
+    ewig = threading.Event()
+    import kcteam.ondemand as od
+    monkeypatch.setattr(type(agent), "process_export",
+                        lambda self: (ewig.wait(60), False)[1])
+    t = threading.Thread(target=agent.serve, daemon=True)
+    t0 = time.monotonic()
+    t.start()
+    time.sleep(0.15)
+    agent.shutdown()
+    t.join(timeout=10)
+    dauer = time.monotonic() - t0
+    assert not t.is_alive()
+    assert dauer < agent.worker_shutdown_timeout + 4, dauer
+    ewig.set()
+
+
+def test_shutdown_waehrend_auftrag_kein_neuer_claim(monkeypatch):
+    """Nach `stop` wird kein neuer Auftrag mehr angenommen."""
+    claims = []
+    agent = _agent_fake()
+
+    def naechster(self):
+        claims.append(1)
+        agent.stop.set()                      # Stop mitten im Auftragsdrain
+        return False
+
+    _patched_serve(agent, monkeypatch, process_next=naechster)
+    agent.serve()
+    assert claims == [1]                      # ein Drain, danach Ende

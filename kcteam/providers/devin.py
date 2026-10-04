@@ -90,6 +90,9 @@ class DevinProvider(Provider):
         self.poll_seconds = int(settings.get("poll_seconds", 300))
         self.max_session_seconds = int(settings.get("max_session_seconds", 7200))
         self.timeout_s = float(settings.get("timeout_s", 60))
+        # Getrennt: ein langsamer Connect soll nicht die ganze Lesezeit fressen,
+        # und ein haengender Server darf den Worker nicht unbegrenzt halten.
+        self.connect_timeout_s = float(settings.get("connect_timeout_s", 10))
         self.max_restarts = int(settings.get("max_session_restarts", 1))
         self.max_acu = settings.get("max_acu_limit")          # optionaler Kostenrahmen pro Session
         self._db = None
@@ -109,9 +112,11 @@ class DevinProvider(Provider):
             key = os.environ.get("DEVIN_API_KEY")
             if not key:
                 raise ProviderError("DEVIN_API_KEY fehlt (Provider 'devin' ist gewählt)", retryable=False)
-            self._http = httpx.Client(base_url=self.base_url,
-                                      headers={"Authorization": f"Bearer {key}"},
-                                      timeout=self.timeout_s)
+            self._http = httpx.Client(
+                base_url=self.base_url,
+                headers={"Authorization": f"Bearer {key}"},
+                timeout=httpx.Timeout(self.timeout_s,
+                                      connect=self.connect_timeout_s))
         return self._http
 
     def _api(self, method: str, path: str, payload: dict | None = None) -> dict:
@@ -165,11 +170,14 @@ class DevinProvider(Provider):
                        (key, sid, meta.get("role"), meta.get("entity_id")))
 
     def _mark(self, key: str, status: str, **fields) -> None:
+        import json as _json
         if self._db is None:
             row = self._mem.get(key)
             if row is not None:
                 row.update(status=status, **fields)
             return
+        fields = {k: (_json.dumps(v, ensure_ascii=False) if k == "result" else v)
+                  for k, v in fields.items()}
         sets = ", ".join(f"{k}=%s" for k in fields)
         self._db.query(f"UPDATE curriculum.provider_sessions SET status=%s, updated_at=now()"
                        + (f", {sets}" if sets else "") + " WHERE call_key=%s",
@@ -249,7 +257,16 @@ class DevinProvider(Provider):
         if row["status"] == "failed":
             raise ProviderError(f"Devin-Session {row['session_id']} aufgegeben: {row.get('detail')}",
                                 retryable=False)
-        # status 'finished' faellt durch: das Ergebnis liegt bei Devin und wird unten erneut abgerufen
+        if row["status"] == "finished":
+            # Endzustand: das Ergebnis liegt lokal — kein Neubau, kein Poll,
+            # auch wenn die Session remote laengst weg ist.
+            result = row.get("result")
+            if isinstance(result, (dict, list)):
+                return Completion(text=json.dumps(result, ensure_ascii=False),
+                                  model=model)
+            if isinstance(result, str) and result:
+                return Completion(text=result, model=model)
+            # Rows aus der Zeit vor dem Ergebnis-Cache: einmal remote holen.
         started = self._age(row)
         if started > self.max_session_seconds:
             self._mark(key, "failed", detail="Zeitfenster überschritten")
@@ -260,11 +277,20 @@ class DevinProvider(Provider):
 
         try:
             info = self._api("GET", f"/sessions/{row['session_id']}")
+            state = str(info.get("status_enum") or info.get("status") or "working").lower()
         except ProviderError as exc:
-            log.warning("devin_request_failed session_id=%s entity_id=%s error_type=poll",
+            if ": 404" not in str(exc):
+                log.warning("devin_request_failed session_id=%s entity_id=%s error_type=poll",
+                            row["session_id"], meta.get("entity_id"))
+                raise exc
+            # Lokale Zeile vorhanden, der Anbieter kennt die Session nicht
+            # mehr — wie „expired": begrenzt neu starten, nie sofort scheitern.
+            info, state = {}, "missing_remote"
+            self._mark(key, row["status"],
+                       missing_remote=int(row.get("missing_remote") or 0) + 1,
+                       detail="missing_remote")
+            log.warning("devin_session_missing session_id=%s entity_id=%s",
                         row["session_id"], meta.get("entity_id"))
-            raise exc
-        state = str(info.get("status_enum") or info.get("status") or "working").lower()
         log.info("devin_request_status session_id=%s status=%s entity_id=%s",
                  row["session_id"], state, meta.get("entity_id"))
 
@@ -276,7 +302,7 @@ class DevinProvider(Provider):
                             row["session_id"], meta.get("entity_id"))
                 raise ProviderError(f"Devin-Session {row['session_id']} endete ohne "
                                     "structured_output", retryable=False)
-            self._mark(key, "finished")
+            self._mark(key, "finished", result=out)
             log.info("devin_request_completed session_id=%s entity_id=%s",
                      row["session_id"], meta.get("entity_id"))
             return Completion(text=json.dumps(out, ensure_ascii=False), model=model)
@@ -288,18 +314,31 @@ class DevinProvider(Provider):
                             row["session_id"], meta.get("entity_id"))
                 raise ProviderError(f"Devin-Session {row['session_id']} wartet weiterhin auf "
                                     "Eingabe", retryable=False)
-            # Einmal antworten: die Regeln verbieten Rückfragen, trotzdem kann Devin blockieren.
-            self._api("POST", f"/sessions/{row['session_id']}/message", {"message": _NUDGE})
-            self._mark(key, "working", nudged=True)
-            raise ProviderPending(f"Devin-Session {row['session_id']} nach Rückfrage fortgesetzt",
-                                  wait_seconds=self.poll_seconds, session_id=row["session_id"])
+            # Einmal antworten: die Regeln verbieten Rückfragen, trotzdem kann
+            # Devin blockieren — und auch diese Session kann weg sein.
+            try:
+                self._api("POST", f"/sessions/{row['session_id']}/message",
+                          {"message": _NUDGE})
+            except ProviderError as exc:
+                if ": 404" not in str(exc):
+                    raise
+                state = "missing_remote"
+                self._mark(key, "working",
+                           missing_remote=int(row.get("missing_remote") or 0) + 1,
+                           detail="missing_remote")
+            else:
+                self._mark(key, "working", nudged=True)
+                raise ProviderPending(
+                    f"Devin-Session {row['session_id']} nach Rückfrage fortgesetzt",
+                    wait_seconds=self.poll_seconds, session_id=row["session_id"])
 
         if state in _LAEUFT:
             self._mark(key, "working")
             raise ProviderPending(f"Devin-Session {row['session_id']} läuft ({state})",
                                   wait_seconds=self.poll_seconds, session_id=row["session_id"])
 
-        # expired / failed / unbekannt: einmal neu versuchen, dann aufgeben.
+        # expired / failed / missing_remote / unbekannt: begrenzt neu
+        # versuchen, dann aufgeben — nie unbegrenzt Provider-Kosten laufen.
         if int(row.get("restarts") or 0) < self.max_restarts:
             sid = self._create(system, user, meta)
             self._restarted(key, sid)
