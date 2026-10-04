@@ -24,7 +24,7 @@ from collections import Counter, defaultdict
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any, Callable
 
-from .agents import AgentFailed, AgentRunner, BudgetExhausted
+from .agents import AgentFailed, AgentRunner, BudgetExhausted, compact
 from .providers.base import ProviderPending
 from .integrator import check_calibration, check_diagnostics, check_graph, check_visuals
 from .schemas import (Calibration, ConceptDraft, ConceptGraph, CriticReport, CurriculumMap, Diagnostics,
@@ -125,6 +125,34 @@ def compact_visuals(v: dict | None) -> dict | None:
                           "level": i.get("level"), "type": (i.get("visual") or {}).get("type"),
                           "answer": i.get("answer")} for i in v.get("visual_items", [])],
     }
+
+
+#: Freiraum, den Aufgabe, Rollenregeln und Antwort-Schema im Inspektor-Auftrag
+#: brauchen — der geprüfte Inhalt allein darf höchstens so gross werden
+#: (Devin-Grenze: 29.500 Zeichen Gesamtvorgabe).
+_INHALT_BUDGET = 20_000
+
+
+def _inhalt_teile(content: dict) -> list[dict]:
+    """Prüfinhalt in Portionen schneiden, die in einen Auftrag passen.
+
+    Ein fertiges Konzept trägt Kalibrierung und Diagnostik zusammen leicht
+    über die Vorgaben-Grenze — der Auftrag wurde dann als zu gross
+    zurückgemeldet, ohne dass je geprüft wurde. Abgeschnitten wird nichts:
+    geprüft wird in Teilen, an ganzen Schlüsselfeldern entlang, damit
+    Fundstellen wie `diagnostic_items[1]` weiter stimmen.
+    """
+    if len(compact(content)) <= _INHALT_BUDGET:
+        return [content]
+    teile: list[dict] = []
+    for key, wert in content.items():
+        groesse = len(compact(teile[-1])) if teile else 0
+        if teile and groesse + len(compact(wert)) > _INHALT_BUDGET:
+            teile.append({})
+        if not teile:
+            teile.append({})
+        teile[-1][key] = wert
+    return teile
 
 
 class Pipeline:
@@ -228,10 +256,22 @@ class Pipeline:
         task = (f"Prüfe den folgenden Inhalt (Station: {stage}) für Kinder der Klassenstufe {grade_hint}. "
                 "Prüfe jedes Feld. Entscheide approved oder rejected und begründe jeden Befund mit Fundstelle und Auflage. "
                 "Fundstellen relativ zu 'inhalt' angeben (z. B. anchor_items[1].prompt).")
-        verdict = self.agents.call("kinderrechts_inspektor", task,
-                                   {"station": stage, "klassenstufe": grade_hint, "inhalt": content,
-                                    "vom_menschen_freigegeben": overrides},
-                                   InspectorVerdict, entity_id=entity_id, meta={"stage": stage}, stage=stage)
+        teile = _inhalt_teile(content)
+        fundstellen: list[Finding] = []
+        abgelehnt = False
+        zeilen: list[str] = []
+        for nummer, teil in enumerate(teile, 1):
+            hinweis = "" if len(teile) == 1 else f" (Teil {nummer} von {len(teile)} derselben Prüfung)"
+            v = self.agents.call("kinderrechts_inspektor", task + hinweis,
+                                 {"station": stage, "klassenstufe": grade_hint, "inhalt": teil,
+                                  "vom_menschen_freigegeben": overrides},
+                                 InspectorVerdict, entity_id=entity_id, meta={"stage": stage}, stage=stage)
+            fundstellen += v.findings
+            abgelehnt = abgelehnt or v.decision == "rejected"
+            if v.summary:
+                zeilen.append(v.summary)
+        verdict = InspectorVerdict(decision="rejected" if abgelehnt else "approved",
+                                 findings=fundstellen, summary=" | ".join(zeilen))
         if any(f.severity == "block" for f in verdict.findings):
             verdict.decision = "rejected"
         if verdict.decision == "rejected" and not any(f.severity == "block" for f in verdict.findings):

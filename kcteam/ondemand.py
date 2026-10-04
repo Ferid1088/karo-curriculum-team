@@ -464,6 +464,16 @@ class CurriculumAgent:
                 pipe.finalize_block(bid, set(ids))
         approved = [i for i in ids if (self.db.concept(i) or {}).get("status") == "approved"]
         if not approved:
+            offen = [i for i in ids if (self.db.concept(i) or {}).get("status") != "blocked"]
+            if offen and req["attempts"] < self.max_attempts:
+                # Nichts wurde abgelehnt — die Prüfung steckt nur mitten drin
+                # (Fehler in der Menschen-Warteschlange oder ein Lauf wurde
+                # unterbrochen). Ein gesperrter Auftrag würde das Thema
+                # tagelang als „abgelehnt" behandeln, obwohl es das nicht ist.
+                self._requeue(rid, message="Prüfung läuft noch — nichts wurde abgelehnt")
+                self.db.query("UPDATE curriculum.topic_requests SET next_attempt_at=now() "
+                              "+ interval '10 minutes' WHERE id=%s", (rid,))
+                return
             self.db.mark_urgent(ids)
             return self.db.finish_request(rid, "blocked", ids, reason_code="blocked_by_inspector",
                                           message=self._last_findings(ids[0]))
