@@ -36,6 +36,10 @@ ROLE_STAGE = {"curriculum_analyst": "curriculum", "fachdidaktiker": "graph", "ni
               "kinderrechts_inspektor": "inspection", "curriculum_agent": "match",
               "lektionsautor": "lesson"}
 
+#: Obergrenze fuer die Rückmeldung im Auftrag — genug Raum fuer konkrete
+#: Hinweise, nicht genug, um die Anbietergrenze zu sprengen.
+FEEDBACK_MAX = 4_000
+
 
 class BudgetExhausted(RuntimeError):
     """Lauf anhalten (Budget, Nutzungslimit, Abbruch). Der nächste Lauf macht an derselben Stelle weiter."""
@@ -257,7 +261,10 @@ class AgentRunner:
         stage = stage or ROLE_STAGE.get(role)
         user = f"## Auftrag\n{task}\n\n## Daten\n```json\n{compact(payload)}\n```"
         if feedback:
-            user += ("\n\n## Rückmeldung, die du vollständig umsetzen musst\n" + feedback +
+            # Die Rückmeldung darf den Auftrag nicht ohne Grenze wachsen
+            # lassen — ein gesprächiger Inspektor sprengte sonst die
+            # Anbietergrenze (EXP-201: 40.876 Zeichen).
+            user += ("\n\n## Rückmeldung, die du vollständig umsetzen musst\n" + feedback[:FEEDBACK_MAX] +
                      "\n\nGib das vollständige, überarbeitete JSON-Objekt zurück.")
         model = self.cfg.model_for(self.provider.name, role)
         meta = {**(meta or {}), "role": role, "entity_id": entity_id, "feedback": feedback, "payload": payload}

@@ -33,7 +33,7 @@ import referencing.exceptions
 from psycopg.types.json import Jsonb
 
 from . import consumers
-from .agents import compact
+from .agents import FEEDBACK_MAX, compact
 
 #: Markup, Skript oder Style – nichts davon darf je in einer Lektion stehen (Abnehmer wie Karo verbieten es).
 _MARKUP = re.compile(r"<\s*/?\s*[a-z!]|&lt;\s*/?\s*[a-z]|javascript\s*:|\bon(?:error|load|click)\s*=|"
@@ -617,7 +617,7 @@ def _grundlage_budget(pipe, spec: dict, extra: str, task: str, feedback: str | N
         return _GROUNDING_BUDGET
     fest = (int(getattr(provider, "prompt_overhead", 0) or 0)
             + pipe.agents.system_laenge("lektionsautor", spec["schema"], extra)
-            + len(task) + len(feedback or "")
+            + len(task) + min(len(feedback or ""), FEEDBACK_MAX)
             + len("## Auftrag\n\n## Daten\n```json\n\n```")
             + _RETRY_RESERVE)
     return max(_GRUNDLAGE_MINIMUM, limit - fest)
