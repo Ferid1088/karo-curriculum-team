@@ -616,3 +616,30 @@ def test_grounding_unter_budget_bleibt_unberuehrt():
     data = {"konzept": {"id": "X"}, "fehlvorstellungen": [],
             "aufgaben_beispiele": [{"aufgabe": "f"}]}
     assert lessons._im_budget(data) is data
+
+
+def test_grundlage_budget_misst_den_festen_teil():
+    """EXP-201 Regression: das statische Grundlage-Budget ignorierte den
+    ~24k festen Auftragsteil (Praeambel, Rollen, Abnehmer-Format) und lag
+    damit ueber der Anbietergrenze. Jetzt wird gemessen, was der Anbieter
+    als Grenze nennt — der Rest gehoert der Grundlage."""
+    from types import SimpleNamespace
+    from kcteam import lessons
+    prov = _Aufzeichner(native=True)
+    prov.prompt_limit = 29_500
+    prov.prompt_overhead = 1_000
+    agents = _runner(prov)
+    pipe = SimpleNamespace(agents=agents)
+    spec = {"id": "karo-adaptiv-v1", "schema": {"type": "object"},
+            "registry": [], "instructions": "i" * 6_000}
+    extra = "## Format des Abnehmers\n" + "e" * 9_000
+    budget = lessons._grundlage_budget(pipe, spec, extra, "t" * 150, "fb" * 1_000)
+    system = agents.system_laenge("lektionsautor", spec["schema"], extra)
+    wrapper = len("## Auftrag\n\n## Daten\n```json\n\n```")
+    assert budget == 29_500 - (1_000 + system + 150 + 2_000 + wrapper
+                               + lessons._FEEDBACK_RESERVE)
+    # Und ein Anbieter ohne Grenze bekommt den Rueckfall.
+    prov2 = _Aufzeichner(native=True)
+    pipe2 = SimpleNamespace(agents=_runner(prov2))
+    assert lessons._grundlage_budget(pipe2, spec, extra, "t", None) \
+        == lessons._GROUNDING_BUDGET

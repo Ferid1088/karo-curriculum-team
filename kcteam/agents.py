@@ -218,6 +218,27 @@ class AgentRunner:
         return self._call(role, task, payload, self.system_prompt(role, schema), schema.model_validate,
                           entity_id=entity_id, feedback=feedback, web_search=web_search, meta=meta, stage=stage)
 
+    def _system_parts(self, role: str, json_schema: dict, extra_system: str) -> list[str]:
+        parts = [self._common, self._role_prompts[role]]
+        if self.team is not None:
+            parts.append(self.team.section(role))
+        if extra_system:
+            parts.append(extra_system)
+        if not getattr(self.provider, "structured_output_native", False):
+            parts.append("## JSON-Schema deiner Antwort\n```json\n" + compact(json_schema) + "\n```")
+        # Bei Providern mit `structured_output_native` wird das Schema als
+        # API-Feld erzwungen; die Prompt-Kopie (bei Karos Lektionsformat
+        # ~29k Zeichen) wuerde sonst die Vorgaben-Grenze sprengen — jede
+        # Nachfrage mit Rückmeldung wächst noch einmal.
+        return parts
+
+    def system_laenge(self, role: str, json_schema: dict, extra_system: str = "") -> int:
+        """Laenge des Systemprompts, wie `call_json` ihn zusammensetzt.
+
+        Damit kann der Auftraggeber seine Nutzdaten in die Anbietergrenze
+        einpassen, statt sie erst dort messen zu lassen."""
+        return len("\n\n".join(self._system_parts(role, json_schema, extra_system)))
+
     def call_json(self, role: str, task: str, payload: dict[str, Any], json_schema: dict,
                   validate: Callable[[Any], Any], *, entity_id: str | None = None, feedback: str | None = None,
                   meta: dict[str, Any] | None = None, stage: str | None = None, extra_system: str = "") -> Any:
@@ -226,18 +247,8 @@ class AgentRunner:
         key = (role, "json:" + hashlib.sha256(compact(json_schema).encode()).hexdigest()[:16], id(self.team),
                hashlib.sha256(extra_system.encode()).hexdigest()[:16])
         if key not in self._prompt_cache:
-            parts = [self._common, self._role_prompts[role]]
-            if self.team is not None:
-                parts.append(self.team.section(role))
-            if extra_system:
-                parts.append(extra_system)
-            if not getattr(self.provider, "structured_output_native", False):
-                parts.append("## JSON-Schema deiner Antwort\n```json\n" + compact(json_schema) + "\n```")
-            # Bei Providern mit `structured_output_native` wird das Schema als
-            # API-Feld erzwungen; die Prompt-Kopie (bei Karos Lektionsformat
-            # ~29k Zeichen) wuerde sonst die Vorgaben-Grenze sprengen — jede
-            # Nachfrage mit Rückmeldung wächst noch einmal.
-            self._prompt_cache[key] = "\n\n".join(parts)
+            self._prompt_cache[key] = "\n\n".join(
+                self._system_parts(role, json_schema, extra_system))
         meta = {**(meta or {}), "json_schema": json_schema}
         return self._call(role, task, payload, self._prompt_cache[key], validate, entity_id=entity_id,
                           feedback=feedback, web_search=False, meta=meta, stage=stage)

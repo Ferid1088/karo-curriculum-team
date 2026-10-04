@@ -87,6 +87,11 @@ class DevinProvider(Provider):
     def __init__(self, settings: dict):
         super().__init__(name="devin", settings=settings, required_env=("DEVIN_API_KEY",))
         self.structured_output_native = True
+        #: Grenze fuer den ganzen Auftragsprompt plus der Rahmen, den die API
+        #: selbst dazulegt — der Auftraggeber passt seine Nutzdaten daran an,
+        #: statt sie erst hier messen zu lassen.
+        self.prompt_limit = _PROMPT_LIMIT
+        self.prompt_overhead = len(_PREAMBLE) + len("\n\n") + len("\n\n## Aufgabe\n")
         self.base_url = (settings.get("base_url") or "https://api.devin.ai/v1").rstrip("/")
         self.poll_seconds = int(settings.get("poll_seconds", 300))
         self.max_session_seconds = int(settings.get("max_session_seconds", 7200))
