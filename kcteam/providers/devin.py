@@ -48,6 +48,30 @@ ARBEITSREGELN, strikt:
 _NUDGE = ("Bitte ohne Rückfragen weiterarbeiten und das geforderte JSON-Ergebnis jetzt als "
           "structured output abgeben. Es sind keinerlei Datei-, Git- oder Shell-Aktionen nötig.")
 
+# `POST /sessions` lehnt Prompts ab 30 000 Zeichen mit 400. Die Agenten
+# betten das JSON-Schema der Antwort noch einmal in den Prompt, obwohl es
+# als `structured_output_schema` ohnehin maschinell erzwungen wird — die
+# Prompt-Kopie ist redundant und allein ihr Fehlen reicht regelmaessig, um
+# unter die Grenze zu kommen.
+_PROMPT_LIMIT = 29_500
+_SCHEMA_ABSCHNITT = "## JSON-Schema deiner Antwort"
+
+
+def _schema_block_loeschen(prompt: str) -> str:
+    """Entfernt den eingebetteten Schema-Block aus einem call_json-Prompt.
+
+    Der Abschnitt endet am schliessenden Codezaun. Fehlt Marker oder Zaun,
+    bleibt der Prompt unangetastet — lieber ein ehrlicher Fehler als eine
+    still gekuerzte Lektionsvorgabe.
+    """
+    kopf, trenner, rest = prompt.partition(_SCHEMA_ABSCHNITT)
+    if not trenner:
+        return prompt
+    ende = rest.find("```", rest.find("```") + 3)
+    if ende < 0:
+        return prompt
+    return (kopf + rest[ende + 3:]).strip()
+
 #: Statuswerte der v1-API, bei denen die Session noch arbeitet.
 _LAEUFT = {"working", "running", "suspend_requested", "resumed", "resume_requested", "queued", "new"}
 #: Danach wird die Session aufgegeben — sonst wartet ein Auftrag für immer.
@@ -181,11 +205,20 @@ class DevinProvider(Provider):
             payload["structured_output_schema"] = schema   # v1: JSON Schema (Draft 7), max 64 KB
         if self.max_acu:
             payload["max_acu_limit"] = int(self.max_acu)
+        if len(payload["prompt"]) > _PROMPT_LIMIT and "structured_output_schema" in payload:
+            # Das Schema ist an die API ohnehin als Feld angeheftet; die
+            # Prompt-Kopie darf weichen, bevor eine Vorgabe abgeschnitten wird.
+            payload["prompt"] = _schema_block_loeschen(payload["prompt"])
+        if len(payload["prompt"]) > _PROMPT_LIMIT:
+            raise ProviderError(
+                f"Devin API: Auftrag hat {len(payload['prompt'])} Zeichen — über der "
+                f"Grenze von {_PROMPT_LIMIT}. Die Vorgabe wird nicht gekürzt, sondern "
+                "als zu groß zurückgemeldet.", retryable=False)
         try:
             info = self._api("POST", "/sessions", payload)
         except ProviderError as exc:
-            # Lehnt die API das Schema ab, lieber ohne es senden — die
-            # Schemavorgabe steht ohnehin im Prompt und die lokale Prüfung bleibt.
+            # Lehnt die API das Schema ab, lieber ohne es senden — die lokale
+            # Prüfung bleibt ohnehin und das Schema steht meist noch im Prompt.
             if "structured_output_schema" in payload and "422" in str(exc):
                 payload.pop("structured_output_schema")
                 info = self._api("POST", "/sessions", payload)

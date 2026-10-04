@@ -250,6 +250,33 @@ def test_422_faellt_auf_prompt_schema_zurueck():
     assert "devin-1" in remote                        # zweiter Create ohne Schema klappte
 
 
+def test_ueberlanger_prompt_ohne_api_schema_ist_fehler():
+    """Die API nimmt keine ueberlangen Prompts: lieber sauber scheitern
+    als den Auftrag abzuschneiden — die Lektionsvorgabe bleibt ganz."""
+    p = DevinFake({})
+    system = "## JSON-Schema deiner Antwort\n```json\n" + "x" * 40_000 + "\n```"
+    with pytest.raises(ProviderError) as exc:
+        _call(p, system=system, meta={"role": "r"})    # kein json_schema → kein Kompromiss
+    assert exc.value.retryable is False
+
+
+def test_ueberlanger_prompt_verliert_nur_die_schema_kopie():
+    """Trägt meta das Schema ohnehin als API-Feld, darf die Prompt-Kopie
+    entfallen — das Ergebnis wird weiter maschinell erzwungen."""
+    remote = {}
+    p = DevinFake({}, remote=remote)
+    system = ("SYSTEM\n\n## JSON-Schema deiner Antwort\n```json\n" + "x" * 40_000 +
+              "\n```\n\nHINWEIS")
+    meta = {"role": "r", "json_schema": {"type": "object"}}
+    with pytest.raises(ProviderPending):
+        _call(p, system=system, meta=meta)
+    s = remote["devin-1"]
+    assert s["schema"] == {"type": "object"}          # API-Feld blieb
+    assert "x" * 10 not in s["prompt"]                # Prompt-Kopie ist weg
+    assert "HINWEIS" in s["prompt"]                   # der Rest bleibt
+    assert len(s["prompt"]) <= 29_500
+
+
 def test_secret_erscheint_nie_im_log(caplog):
     import logging
     p = DevinFake({})
