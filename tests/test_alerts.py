@@ -102,3 +102,29 @@ def test_config_laedt_alerts_aus_yaml(tmp_path):
     p.write_text("alerts:\n  stuck_session_minutes: 42\n", encoding="utf-8")
     cfg = load_config(p)
     assert cfg.alerts == {"stuck_session_minutes": 42}
+
+
+def test_fehlerklasse_trennt_betrieb_von_inhalt():
+    from kcteam.alerts import _fehlerklasse, CONTENT_KLASSEN
+    assert _fehlerklasse("claude CLI: You've hit your weekly limit") == "provider_quota"
+    assert _fehlerklasse("Devin API POST /sessions: 401") == "provider_auth"
+    assert _fehlerklasse("Auftrag hat 29708 Zeichen — über der Grenze") == "prompt_too_large"
+    assert _fehlerklasse("connection timed out") == "provider_transport"
+    assert _fehlerklasse("Die Lektion passt nicht zum Format: ...") == "contract_invalid"
+    assert _fehlerklasse(None) == "content"          # Unbekannt: vorsichtig fachlich
+    assert {"provider_quota", "provider_auth", "provider_transport",
+            "prompt_too_large"}.isdisjoint(CONTENT_KLASSEN)
+
+
+def test_reject_rate_zaehlt_nur_fachliche_verluste():
+    """Quota-Fehlschläge blasen die Material-Quote nicht auf."""
+    zeilen = ([{"status": "failed", "message": "weekly limit resets"}] * 8
+              + [{"status": "failed", "message": "passt nicht zum Format"}] * 2
+              + [{"status": "ready", "message": None}] * 10)
+    db = FakeDB(**{"FROM curriculum.lesson_exports": zeilen})
+    funde = alerts.pruefen(db, _cfg(validation_reject_rate=0.30))
+    # 2/20 = 10 % fachlich — kein Alarm trotz 50 % Gesamtverlust
+    assert not any(f["art"] == "validation_rejects" for f in funde)
+    funde = alerts.pruefen(db, _cfg(validation_reject_rate=0.05))
+    assert any(f["art"] == "validation_rejects" and "2/20" in f["text"]
+               for f in funde)

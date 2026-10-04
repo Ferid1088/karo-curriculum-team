@@ -521,6 +521,29 @@ def requeue_stale_exports(db, minutes: int = 15, max_attempts: int = 3) -> int:
                            RETURNING id""", {"m": max_attempts, "min": minutes}))
 
 
+def sweep_orphan_sessions(db) -> int:
+    """Provider-Sessions aufraeumen, deren Auftrag laengst entschieden ist.
+
+    Eine Inspektor-Session, die nach `ready` angelegt wurde, fragt niemand
+    mehr ab — niemand ruft `complete()` mit ihrem Aufruf-Schluessel. Sie
+    bliebe fuer immer 'working': ein falscher "haengt"-Alarm bei jedem
+    doctor-Lauf und eine Session beim Anbieter, die nie geerntet wird.
+    'abandoned' statt 'failed': die Session lieferte moeglicherweise ein
+    Ergebnis — ihr wurde nur keine mehr abgenommen. Kostet keinen
+    Anbieteraufruf: es wird nur der lokale Stand gesetzt.
+    """
+    return len(db.query(
+        """UPDATE curriculum.provider_sessions ps
+              SET status='abandoned', updated_at=now(),
+                  detail=coalesce(detail || ' | ', '') ||
+                         'verwaist: Auftrag bereits entschieden'
+            FROM curriculum.lesson_exports e
+           WHERE ps.status='working'
+             AND ps.entity_id = 'EXP-' || e.id::text
+             AND e.status IN ('ready','failed','unavailable')
+           RETURNING ps.call_key"""))
+
+
 # ---------------------------------------------------------------- Erzeugen
 def grounding(db, concept_id: str, grade: int, topic: str | None) -> dict:
     """Die geprüfte Grundlage aus dem Curriculum – daran hält sich der Lektionsautor."""

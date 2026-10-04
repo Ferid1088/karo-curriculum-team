@@ -387,3 +387,32 @@ def test_shutdown_waehrend_auftrag_kein_neuer_claim(monkeypatch):
     _patched_serve(agent, monkeypatch, process_next=naechster)
     agent.serve()
     assert claims == [1]                      # ein Drain, danach Ende
+
+
+@needs_db
+def test_verwaiste_sessions_werden_abgelegt(env):
+    """Fertig entschiedene Exporte lassen ihre Provider-Sessions nicht als
+    ewig 'working' stehen — sonst schlaegt der Stuck-Alarm falsch."""
+    from kcteam import lessons
+    cfg, d = env
+    # Ein Export im Endzustand + eine 'working'-Session, die zu ihm gehoert
+    eid = d.query("""INSERT INTO curriculum.lesson_exports
+                        (format_id, format_hash, format_spec, grade, status)
+                     VALUES ('t', 'h', '{}'::jsonb, 6, 'ready') RETURNING id""")[0]["id"]
+    d.query("""INSERT INTO curriculum.provider_sessions
+                  (call_key, provider, session_id, role, entity_id, status)
+               VALUES ('k-orphan', 'devin', 'devin-x', 'inspektor', %s, 'working')""",
+            (f"EXP-{eid}",))
+    # Eine working-Session eines noch laufenden Exports darf nicht angefasst werden
+    eid2 = d.query("""INSERT INTO curriculum.lesson_exports
+                         (format_id, format_hash, format_spec, grade, status)
+                      VALUES ('t', 'h', '{}'::jsonb, 6, 'running') RETURNING id""")[0]["id"]
+    d.query("""INSERT INTO curriculum.provider_sessions
+                  (call_key, provider, session_id, role, entity_id, status)
+               VALUES ('k-live', 'devin', 'devin-y', 'inspektor', %s, 'working')""",
+            (f"EXP-{eid2}",))
+
+    assert lessons.sweep_orphan_sessions(d) == 1
+    assert d.one("SELECT status FROM curriculum.provider_sessions WHERE call_key='k-orphan'")["status"] == "abandoned"
+    assert d.one("SELECT status FROM curriculum.provider_sessions WHERE call_key='k-live'")["status"] == "working"
+    assert lessons.sweep_orphan_sessions(d) == 0   # idempotent

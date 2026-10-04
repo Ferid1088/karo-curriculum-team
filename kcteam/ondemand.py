@@ -164,6 +164,13 @@ class CurriculumAgent:
                     self.db, max_attempts=self.max_attempts)
                 if n:
                     self.log(f"↺ {n} hängende Aufträge wieder eingereiht")
+                try:
+                    w = lessons.sweep_orphan_sessions(self.db)
+                except Exception as exc:  # noqa: BLE001 – Aufräumen darf den Lauf nicht kippen
+                    self.log(f"⚠ Waisen-Sweep: {exc!r}")
+                else:
+                    if w:
+                        self.log(f"⚲ {w} verwaiste Anbieter-Session(en) abgelegt")
                 while not self.stop.is_set() and self.process_next():
                     pass
                 if once:

@@ -16,6 +16,47 @@ DEFAULTS = {
 }
 
 
+_QUOTA = ("limit", "quota", "kontingent", "429", "rate-limit", "rate limit",
+          "resets")
+_AUTH = ("401", "403", "ungültig", "unauthorized", "schlüssel")
+_TRANSPORT = ("timeout", "timed out", "connection", "verbindung", "502", "503",
+              "504", "econnreset")
+_PROMPT_GROSS = ("über der grenze", "ueber der grenze", "zeichen — über")
+_INSPECTOR = ("blocked_by_inspector", "inspektor")
+
+
+def _fehlerklasse(message: str | None) -> str:
+    """Warum ein Export scheiterte — nur 'content' ist ein fachlicher Befund.
+
+    Alles andere sind Betriebszustaende des Anbieters (Kontingent, Zugang,
+    Uebertragung, zu grosse Vorgabe): sie gehoeren in ihr eigenes Bild,
+    nicht in die Verwerfungsquote, mit der Materialqualitaet gemessen wird.
+    """
+    m = (message or "").lower()
+    if any(t in m for t in _QUOTA):
+        return "provider_quota"
+    if any(t in m for t in _AUTH):
+        return "provider_auth"
+    if any(t in m for t in _PROMPT_GROSS):
+        return "prompt_too_large"
+    if any(t in m for t in _TRANSPORT):
+        return "provider_transport"
+    if "lektion passt nicht zum format" in m:
+        return "contract_invalid"
+    if any(t in m for t in _INSPECTOR):
+        return "inspector_reject"
+    if "format" in m or "verworfen" in m or "inspektor" in m or "prüfung" in m:
+        return "content"
+    # Unbekannt zaehlt vorsichtig als fachlich: lieber einmal zu viel
+    # geprueft als ein Inhaltsproblem unter Betriebsrauschen versteckt.
+    return "content"
+
+
+#: Klassen, die etwas ueber die Materialqualitaet sagen — der Rest ist
+#: Betrieb (Kontingent, Zugang, Uebertragung, Vorgabengroesse).
+CONTENT_KLASSEN = frozenset({"content", "contract_invalid", "inspector_reject"})
+
+
 def grenzen(cfg) -> dict:
     """Schwellen aus der Konfiguration — fehlt ein Wert, gilt der
     eingebaute Standard (derselbe, der in config.yaml dokumentiert ist)."""
@@ -67,17 +108,25 @@ def pruefen(db, cfg) -> list[dict]:
         pass
     try:
         letzte = db.query(
-            """SELECT status FROM curriculum.lesson_exports
+            """SELECT status, message FROM curriculum.lesson_exports
                 ORDER BY id DESC LIMIT 50""")
         if len(letzte) >= 10:
             verloren = sum(1 for r in letzte if r["status"] == "failed")
+            inhaltlich = sum(1 for r in letzte
+                             if r["status"] == "failed"
+                             and _fehlerklasse(r.get("message")) in CONTENT_KLASSEN)
             quote = verloren / len(letzte)
-            if quote > g["validation_reject_rate"]:
+            # Was zaehlt, ist die fachliche Verwerfungsquote — Kontingent-
+            # und Zugangsfehler des Anbieters sind ein anderes Problem,
+            # sie machen keine Lektion schlechter.
+            if inhaltlich / len(letzte) > g["validation_reject_rate"]:
                 fundstellen.append({
                     "art": "validation_rejects", "schwere": "warn",
-                    "text": f"{verloren}/{len(letzte)} der letzten Exporte "
-                            f"verworfen ({quote:.0%} > "
-                            f"{g['validation_reject_rate']:.0%})"})
+                    "text": f"{inhaltlich}/{len(letzte)} der letzten Exporte "
+                            f"fachlich verworfen "
+                            f"({inhaltlich / len(letzte):.0%} > "
+                            f"{g['validation_reject_rate']:.0%}; "
+                            f"{verloren} mit allen Ursachen)"})
     except Exception:
         pass
     try:

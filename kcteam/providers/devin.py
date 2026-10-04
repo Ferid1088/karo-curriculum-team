@@ -214,10 +214,16 @@ class DevinProvider(Provider):
             payload["structured_output_schema"] = schema   # v1: JSON Schema (Draft 7), max 64 KB
         if self.max_acu:
             payload["max_acu_limit"] = int(self.max_acu)
-        if len(payload["prompt"]) > _PROMPT_LIMIT and "structured_output_schema" in payload:
+        schema_native = "structured_output_schema" in payload
+        if len(payload["prompt"]) > _PROMPT_LIMIT and schema_native:
             # Das Schema ist an die API ohnehin als Feld angeheftet; die
             # Prompt-Kopie darf weichen, bevor eine Vorgabe abgeschnitten wird.
             payload["prompt"] = _schema_block_loeschen(payload["prompt"])
+        # Groesse protokollieren — nie Inhalt: nahe am Limit ist ein Frueh-
+        # warnsignal, ueber dem Limit ein lokaler, klassifizierter Fehler.
+        log.info("devin_prompt_size session_role=%s entity_id=%s prompt_chars=%d schema_native=%s",
+                 meta.get("role"), meta.get("entity_id"),
+                 len(payload["prompt"]), schema_native)
         if len(payload["prompt"]) > _PROMPT_LIMIT:
             raise ProviderError(
                 f"Devin API: Auftrag hat {len(payload['prompt'])} Zeichen — über der "
