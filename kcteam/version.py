@@ -70,6 +70,7 @@ def puls(db_holen, dienst: str, takt: int = 60):
     mehreren Arbeitern, eine Schleife, ein Browser) und keiner von ihnen eine
     Stelle hat, an der ohnehin regelmaessig etwas passiert.
     """
+    import atexit
     import threading
 
     def schlagen():
@@ -84,6 +85,13 @@ def puls(db_holen, dienst: str, takt: int = 60):
     halt = threading.Event()
     faden = threading.Thread(target=schlagen, daemon=True, name=f"puls-{dienst}")
     faden.start()
+    # Geordneter Prozess-Exit (auch uvicorns SIGTERM-Weg): die eigene
+    # Zeile sofort raeumen — sonst meldet doctor nach jedem sauberen
+    # Deploy noch Minuten lang einen toten Schreiber als zweiten.
+    def abschied():
+        halt.set()
+        abmelden(db_holen(), dienst)
+    atexit.register(abschied)
     return halt
 
 
