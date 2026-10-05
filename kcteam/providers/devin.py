@@ -226,9 +226,13 @@ class DevinProvider(Provider):
             payload["prompt"] = _schema_block_loeschen(payload["prompt"])
         # Groesse protokollieren — nie Inhalt: nahe am Limit ist ein Frueh-
         # warnsignal, ueber dem Limit ein lokaler, klassifizierter Fehler.
-        log.info("devin_prompt_size session_role=%s entity_id=%s prompt_chars=%d schema_native=%s",
-                 meta.get("role"), meta.get("entity_id"),
-                 len(payload["prompt"]), schema_native)
+        (log.warning if len(payload["prompt"]) > _PROMPT_LIMIT - 1_500 else log.info)(
+            "devin_prompt_size session_role=%s entity_id=%s prompt_chars=%d schema_native=%s",
+            meta.get("role"), meta.get("entity_id"),
+            len(payload["prompt"]), schema_native)
+        if len(payload["prompt"]) > _PROMPT_LIMIT - 1_500:
+            log.warning("devin_prompt_split entity_id=%s system_chars=%d user_chars=%d",
+                        meta.get("entity_id"), len(system), len(user))
         if len(payload["prompt"]) > _PROMPT_LIMIT:
             raise ProviderError(
                 f"Devin API: Auftrag hat {len(payload['prompt'])} Zeichen — über der "
