@@ -611,6 +611,39 @@ def test_claim_schreibt_die_werkspur(env):
     db.query("DELETE FROM curriculum.lesson_exports WHERE id=%s", (row["id"],))
 
 
+def test_fremde_umgebung_ist_fuer_den_worker_unsichtbar(env, monkeypatch):
+    """Der Ghost-Schutz, der haelt: ein Agent in „entwicklung" kann die
+    Produktions-Schlange technisch nicht claimen — nicht nur, dass doctor
+    es melden wuerde. Umgekehrt sieht ein Produktiv-Worker keine
+    Entwicklungsauftraege."""
+    from kcteam import version
+    db = env["db"]
+    db.query("""INSERT INTO curriculum.lesson_exports
+                  (client_id, format_id, format_hash, format_spec, grade, topic,
+                   environment)
+                VALUES ((SELECT id FROM curriculum.api_clients LIMIT 1),
+                        'f','h',%s::jsonb,6,'fremde_umgebung_markierung','produktion')""",
+             (json.dumps(KARO),))
+    assert db.one("SELECT environment FROM curriculum.lesson_exports "
+                  "WHERE topic='fremde_umgebung_markierung'")["environment"] == "produktion"
+    # Dieser Testprozess laeuft unter „entwicklung" (KCTEAM_ENV nicht gesetzt):
+    # die Produktions-Zeile bleibt fuer ihn unsichtbar.
+    assert version.ENVIRONMENT == "entwicklung"
+    gefunden = []
+    for _ in range(5):
+        r = lessons.claim_export(db)
+        if not r:
+            break
+        gefunden.append(r["topic"])
+        db.query("UPDATE curriculum.lesson_exports SET status='queued' WHERE id=%s", (r["id"],))
+    assert "fremde_umgebung_markierung" not in gefunden
+    # als Produktiv-Worker wird genau diese Zeile claimbar
+    monkeypatch.setattr(version, "ENVIRONMENT", "produktion")
+    r = lessons.claim_export(db)
+    assert r is not None and r["topic"] == "fremde_umgebung_markierung"
+    db.query("DELETE FROM curriculum.lesson_exports WHERE topic='fremde_umgebung_markierung'")
+
+
 def test_an_earlier_exam_moves_a_shared_topic_forward(env):
     """Ein Thema, zwei Familien: das fruehere Datum gilt.
 

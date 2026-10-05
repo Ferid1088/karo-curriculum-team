@@ -11,6 +11,8 @@ def test_finished_workers_release_connections_without_closing_live_owner(monkeyp
         broken = False
         def close(self):
             self.closed = True
+        def execute(self, *a, **k):
+            pass
     def connect(*args, **kwargs):
         conn = Connection()
         opened.append(conn)
@@ -35,6 +37,8 @@ def test_still_running_worker_is_not_closed(monkeypatch):
         broken = False
         def close(self):
             self.closed = True
+        def execute(self, *a, **k):
+            pass
     monkeypatch.setattr("kcteam.db.psycopg.connect", lambda *a, **kw: Connection())
     db = DB("test-only")
     started, release = threading.Event(), threading.Event()

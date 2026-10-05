@@ -30,6 +30,12 @@ REVIEWER_FUNCS = ["review_response(bigint, text, numeric, text)",
                   "record_external_result(uuid, text, jsonb, text, numeric, text)", "purge_learner_data(integer)"]
 
 
+def _umgebung() -> str:
+    """Der Queue-Namespace dieses Prozesses (lazy: version haelt ihn)."""
+    from . import version
+    return version.ENVIRONMENT
+
+
 class DB:
     @staticmethod
     def connection_warnings(url: str) -> list[str]:
@@ -76,6 +82,12 @@ class DB:
                                    prepare_threshold=None,           # Supabase-Pooler-freundlich
                                    keepalives=1, keepalives_idle=30, keepalives_interval=10, keepalives_count=5,
                                    connect_timeout=15)
+            # Die Umgebung reist mit der Verbindung: Queue-Zeilen, die ueber
+            # sie entstehen, tragen sie im Standardwert — ein Worker dieser
+            # Umgebung claimt nur, was fuer sie bestimmt ist (Ghost-Schutz).
+            from . import version
+            conn.execute("SELECT set_config('kcteam.env', %s, false)",
+                         (version.ENVIRONMENT,))
             self._local.conn = conn
             with self._lock:
                 self._all.append((threading.current_thread(), conn))
@@ -488,7 +500,7 @@ class DB:
                       WHERE id = ANY(%s)""", (terms, list(concept_ids)))
 
     # ---------------- Aufträge an den Curriculum-Agenten ----------------
-    def claim_request(self, worker: str | None = None) -> dict | None:
+    def claim_request(self, worker: str | None = None, env: str | None = None) -> dict | None:
         # 'ready' + stage 'resume': Karo nutzt das Konzept schon, nur das Vervollständigen wird fortgesetzt
         rows = self.query("""UPDATE curriculum.topic_requests SET started_at=now(), heartbeat_at=now(),
                                     status = CASE WHEN status='ready' THEN 'ready' ELSE 'running' END,
@@ -497,12 +509,14 @@ class DB:
                              WHERE id = (SELECT id FROM curriculum.topic_requests
                                          WHERE (status='queued' OR (status='ready' AND stage='resume'))
                                            AND next_attempt_at <= now()
+                                           AND environment = %(env)s
                                          -- Zuerst, was am ehesten gebraucht wird: das Thema fuer
                                          -- die Arbeit am Freitag vor dem fuer die in drei Wochen.
                                          -- Ohne Datum heisst nicht dringend.
                                          ORDER BY needed_by NULLS LAST, priority DESC, created_at
                                          FOR UPDATE SKIP LOCKED LIMIT 1)
-                             RETURNING *""", {"w": worker})
+                             RETURNING *""",
+                            {"w": worker, "env": env or _umgebung()})
         return rows[0] if rows else None
 
     def update_request(self, rid: int, **fields) -> None:
@@ -535,7 +549,8 @@ class DB:
                                  stage = CASE WHEN status='ready' THEN 'resume' ELSE NULL END, updated_at=now()
                              WHERE (status='running' OR (status='ready' AND stage IS DISTINCT FROM 'resume'))
                                AND heartbeat_at < now() - make_interval(mins => %s)
-                             RETURNING id""", (minutes,))
+                               AND environment = %s
+                             RETURNING id""", (minutes, _umgebung()))
         return len(rows)
 
     def save_calibration(self, concept_id: str, cal: Calibration, keep_status: bool = False) -> None:

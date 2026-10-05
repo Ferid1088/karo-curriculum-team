@@ -470,10 +470,12 @@ def claim_export(db, worker: str | None = None) -> dict | None:
                          claimed_by_run_id=%(w)s, generator_git_sha=%(sha)s, contract_version=%(cv)s
                        WHERE id = (SELECT id FROM curriculum.lesson_exports
                                    WHERE status='queued' AND next_attempt_at <= now()
+                                     AND environment = %(env)s
                                    ORDER BY needed_by NULLS LAST, id
                                    FOR UPDATE SKIP LOCKED LIMIT 1)
                        RETURNING *""",
-                    {"w": worker, "sha": version.GIT_SHA, "cv": CONTRACT_VERSION})
+                    {"w": worker, "sha": version.GIT_SHA, "cv": CONTRACT_VERSION,
+                     "env": version.ENVIRONMENT})
     return rows[0] if rows else None
 
 
@@ -523,12 +525,15 @@ def finish_export(db, eid: int, status: str, lesson: Any = None, reason_code: st
 def requeue_stale_exports(db, minutes: int = 15, max_attempts: int = 3) -> int:
     """Nach einem Absturz wieder einreihen – oder aufgeben, wenn der Export den Worker schon mehrfach
     mitgerissen hat."""
+    from . import version
     return len(db.query("""UPDATE curriculum.lesson_exports
                            SET status = CASE WHEN attempts >= %(m)s THEN 'failed' ELSE 'queued' END,
                                reason_code = CASE WHEN attempts >= %(m)s THEN 'crashed' ELSE reason_code END,
                                finished_at = CASE WHEN attempts >= %(m)s THEN now() END, updated_at=now()
                            WHERE status='running' AND heartbeat_at < now() - make_interval(mins => %(min)s)
-                           RETURNING id""", {"m": max_attempts, "min": minutes}))
+                             AND environment = %(env)s
+                           RETURNING id""",
+                        {"m": max_attempts, "min": minutes, "env": version.ENVIRONMENT}))
 
 
 def sweep_orphan_sessions(db) -> int:
