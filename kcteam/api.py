@@ -166,6 +166,11 @@ def create_app(db: DB | None = None, webhooks: bool = False) -> FastAPI:
         finally:
             if disp:
                 disp.shutdown()
+            # Geordneter Shutdown (uvicorn-Worker laufen als eigene Prozesse —
+            # atexit greift dort nicht zuverlaessig): die eigene Pulszeile
+            # sofort raeumen, sonst meldet doctor nach dem Deploy Minuten
+            # lang tote Staende als zweite Schreiber.
+            version.abmelden(get_db(), "api")
             if db is None and state["db"] is not None:
                 state["db"].close_all()
 
