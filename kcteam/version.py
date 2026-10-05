@@ -131,6 +131,9 @@ def befund(db, erwartet: tuple[str, ...] = ("api", "agent", "admin")) -> tuple[b
                           f"  {r['instance']}  [{r['environment']}]")
         # Pro Umgebung zaehlt nur der eigentliche Schreiber — ein zweiter
         # aktiver Agent dort ist der Ghost, der sich nie melden sollte.
+        # api und admin duerfen Repliken haben (uvicorn-Worker, Browser).
+        if name != "agent":
+            continue
         umgebungen: dict[str | None, list] = {}
         for r in frisch:
             umgebungen.setdefault(r["environment"], []).append(r)

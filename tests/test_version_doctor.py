@@ -126,6 +126,17 @@ def test_agent_in_anderer_umgebung_ist_kein_ghost(db):
     assert ok, zeilen
 
 
+def test_api_repliken_sind_keine_ghosts(db):
+    """Die API laeuft mit KCTEAM_API_WORKERS=2 als zwei Prozesse — nur der
+    Schreiber (agent) darf genau einmal existieren."""
+    _melden(db, "api", "abc123def456", instance="api:8")
+    _melden(db, "api", "abc123def456", instance="api:9")
+    _melden(db, "agent", "abc123def456", instance="docker:7")
+    _melden(db, "admin", "abc123def456", instance="docker:9")
+    ok, zeilen = version.befund(db)
+    assert ok, zeilen
+
+
 def test_doctor_bricht_ab_wenn_die_staende_auseinanderlaufen(db, monkeypatch, capsys):
     from kcteam import cli
     _melden(db, "api", "neu0000neu00")
