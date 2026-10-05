@@ -144,7 +144,10 @@ def test_die_naechste_pause_ist_doppelt_so_lang(db):
     erste = pause_store.setzen(db, "claude_token", "usage limit")
     assert erste["minuten"] == 60
     zweite = pause_store.setzen(db, "claude_token", "usage limit")
-    assert zweite["minuten"] == 120
+    # 120 Minuten — es sei denn, der Deckel (morgen frueh) liegt naeher:
+    # dann gilt die Restzeit bis dorthin, keine volle Verdopplung.
+    _, erwartet = kontingent.naechste_pause(60)
+    assert abs(zweite["minuten"] - erwartet) <= 1
     # Mit Reset-Angabe gilt die Angabe des Anbieters, nicht die Verdopplung.
     bis = dt.datetime.now(dt.timezone.utc) + dt.timedelta(minutes=5)
     dritte = pause_store.setzen(db, "claude_token", "session limit", bis)
