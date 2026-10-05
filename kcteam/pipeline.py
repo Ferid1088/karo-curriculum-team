@@ -132,8 +132,13 @@ def compact_visuals(v: dict | None) -> dict | None:
 #: (Devin-Grenze: 29.500 Zeichen Gesamtvorgabe).
 _INHALT_BUDGET = 20_000
 
+#: Reserve im Inspektions-Auftrag: Wiederholungs-Anhang, Teil-Hinweis und
+#: die Huelle der Nutzdaten. Die Groessen-Rechnung liegt beim Anbieter —
+#: statisch 20k war schon einmal ~600 Zeichen ueber der Grenze (EXP-205).
+_PRUEF_RESERVE = 2_200
 
-def _inhalt_teile(content: dict) -> list[dict]:
+
+def _inhalt_teile(content: dict, budget: int = _INHALT_BUDGET) -> list[dict]:
     """Prüfinhalt in Portionen schneiden, die in einen Auftrag passen.
 
     Ein fertiges Konzept trägt Kalibrierung und Diagnostik zusammen leicht
@@ -142,12 +147,12 @@ def _inhalt_teile(content: dict) -> list[dict]:
     geprüft wird in Teilen, an ganzen Schlüsselfeldern entlang, damit
     Fundstellen wie `diagnostic_items[1]` weiter stimmen.
     """
-    if len(compact(content)) <= _INHALT_BUDGET:
+    if len(compact(content)) <= budget:
         return [content]
     teile: list[dict] = []
     for key, wert in content.items():
         groesse = len(compact(teile[-1])) if teile else 0
-        if teile and groesse + len(compact(wert)) > _INHALT_BUDGET:
+        if teile and groesse + len(compact(wert)) > budget:
             teile.append({})
         if not teile:
             teile.append({})
@@ -256,7 +261,18 @@ class Pipeline:
         task = (f"Prüfe den folgenden Inhalt (Station: {stage}) für Kinder der Klassenstufe {grade_hint}. "
                 "Prüfe jedes Feld. Entscheide approved oder rejected und begründe jeden Befund mit Fundstelle und Auflage. "
                 "Fundstellen relativ zu 'inhalt' angeben (z. B. anchor_items[1].prompt).")
-        teile = _inhalt_teile(content)
+        # Das statische 20k-Budget zaehlt nur den Inhalt — der Auftrag drum
+        # herum (System, Aufgabe, Wiederholungs-Anhang) geht mit in die
+        # Anbietergrenze. Gemessen, nicht geschaetzt: derselbe Rechenfehler
+        # wie bei der Lektionsgrundlage.
+        budget = _INHALT_BUDGET
+        limit = getattr(self.agents.provider, "prompt_limit", None)
+        if limit:
+            fest = (int(getattr(self.agents.provider, "prompt_overhead", 0) or 0)
+                    + len(self.agents.system_prompt("kinderrechts_inspektor", InspectorVerdict))
+                    + len(task) + _PRUEF_RESERVE)
+            budget = min(_INHALT_BUDGET, max(4_000, limit - fest))
+        teile = _inhalt_teile(content, budget)
         fundstellen: list[Finding] = []
         abgelehnt = False
         zeilen: list[str] = []

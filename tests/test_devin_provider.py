@@ -553,6 +553,9 @@ class _DBNull:
     def log_call(self, *a, **k):
         pass
 
+    def log_review(self, *a, **k):
+        pass
+
 
 class _Aufzeichner(MockProvider):
     """Merkt sich den System-Prompt statt eine Rolle zu spielen."""
@@ -643,3 +646,36 @@ def test_grundlage_budget_misst_den_festen_teil():
     pipe2 = SimpleNamespace(agents=_runner(prov2))
     assert lessons._grundlage_budget(pipe2, spec, extra, "t", None) \
         == lessons._GROUNDING_BUDGET
+
+
+class _InspektorProv(_Aufzeichner):
+    """Antwortet mit einem stets genehmigenden Inspektor-Urteil."""
+
+    def complete(self, *, system, user, model, web_search=False, meta=None):
+        self.systeme.append(system)
+        return Completion(text='{"decision":"approved","findings":[],"summary":"ok"}', model="t")
+
+
+def test_inspektion_teilt_nach_gemessener_grenze():
+    """EXP-205 Regression: _INHALT_BUDGET=20k zaehlte nur den Inhalt —
+    mit System-Auftrag (~10k) und Wiederholungs-Anhang lief ein einzelnes
+    Teilpaket auf ~29,1k hart an die Anbietergrenze. Das Budget wird jetzt
+    gemessen: Grenze minus Overhead, System, Aufgabe und Reserve."""
+    from kcteam.pipeline import Pipeline, _INHALT_BUDGET, _PRUEF_RESERVE
+    from kcteam.config import load_config
+    prov = _InspektorProv(native=True)
+    prov.prompt_limit = 29_500
+    prov.prompt_overhead = 1_000
+    pipe = Pipeline(cfg=load_config(), provider=prov, db=_DBNull(),
+                    run_id="t", log=lambda *_: None)
+    # ~19,8k Inhalt in zwei Feldern: unter dem alten 20k-Pauschalbudget ein
+    # Teil — knapp ueber der wirklichen Restgroesse.
+    content = {"feld_a": "a" * 9_900, "feld_b": "b" * 9_900}
+    pipe.inspect("export", "E1", "final", "8", content, round_=1)
+    assert len(prov.systeme) == 2          # dynamisch in zwei Teile zerlegt
+
+    prov2 = _InspektorProv(native=True)    # ohne Grenze: alter Rückfall
+    pipe2 = Pipeline(cfg=load_config(), provider=prov2, db=_DBNull(),
+                     run_id="t", log=lambda *_: None)
+    pipe2.inspect("export", "E2", "final", "8", content, round_=1)
+    assert len(prov2.systeme) == 1         # 19k < 20k-Pauschalbudget

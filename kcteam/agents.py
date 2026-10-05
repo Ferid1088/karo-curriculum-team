@@ -131,7 +131,8 @@ class AgentRunner:
                 sample = {k: EXAMPLES[k] for k in ("fraction_bar", "number_line", "labeled_diagram", "sentence_parts")}
                 parts.append("## Beispiele für Katalog-Darstellungen (Format-Orientierung)\n```json\n"
                              + compact(sample) + "\n```")
-            parts.append("## JSON-Schema deiner Antwort\n```json\n" + compact(schema.model_json_schema()) + "\n```")
+            if not getattr(self.provider, "structured_output_native", False):
+                parts.append("## JSON-Schema deiner Antwort\n```json\n" + compact(schema.model_json_schema()) + "\n```")
             self._prompt_cache[key] = "\n\n".join(parts)
         return self._prompt_cache[key]
 

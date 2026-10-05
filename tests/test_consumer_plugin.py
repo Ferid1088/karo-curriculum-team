@@ -112,7 +112,8 @@ def test_der_dienst_startet_nicht_ohne_die_pruefung(monkeypatch, capsys):
 
 
 def test_das_paket_kommt_aus_einem_tag_nicht_aus_master():
-    """Sonst zieht irgendein Commit in Karo still die Pruefung dieses Dienstes mit."""
+    """Sonst zieht irgendein Commit in Karo still die Pruefung dieses Dienstes mit.
+    Ein Bugfix-Pin auf contract-vX.Y.Z ist erlaubt — die Vertragsversion bleibt X.Y."""
     from pathlib import Path
 
     from kcteam.lessons import CONTRACT_VERSION
@@ -123,4 +124,6 @@ def test_das_paket_kommt_aus_einem_tag_nicht_aus_master():
         zeilen = [z for z in text.splitlines() if "karo-contract" in z and "git+" in z]
         assert zeilen, f"karo-contract fehlt in {name}"
         for z in zeilen:
-            assert z.rstrip('",').endswith("@" + tag), f"{name}: {z.strip()} zeigt nicht auf {tag}"
+            pin = z.rstrip('",').rsplit("@", 1)[-1]
+            assert pin == tag or pin.startswith(tag + "."), \
+                f"{name}: {z.strip()} zeigt nicht auf {tag} oder einen Patch davon"
