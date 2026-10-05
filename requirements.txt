@@ -18,4 +18,4 @@ pytest>=8.0
 # Karo still die Pruefung dieses Dienstes mit, und niemand hat das
 # entschieden. Vertrag aendern siehe README, Abschnitt „Vertrag aendern".
 # Fehlt das Paket oder passt die Fassung nicht, startet der Dienst nicht.
-karo-contract @ git+https://github.com/Ferid1088/karo.git@contract-v1.5
+karo-contract @ git+https://github.com/Ferid1088/karo.git@contract-v1.5.1
