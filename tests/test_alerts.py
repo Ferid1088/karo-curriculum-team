@@ -128,3 +128,38 @@ def test_reject_rate_zaehlt_nur_fachliche_verluste():
     funde = alerts.pruefen(db, _cfg(validation_reject_rate=0.05))
     assert any(f["art"] == "validation_rejects" and "2/20" in f["text"]
                for f in funde)
+
+
+def _agent( instanz, sha, env="produktion", alter=10):
+    return {"instance": instanz, "hostname": instanz.split(":")[0],
+            "git_sha": sha, "environment": env, "alter_s": alter}
+
+
+def test_multiple_active_curriculum_workers():
+    """Der Ghost vom 4.10.: zwei lebende Agenten in einer Umgebung."""
+    db = FakeDB(**{"FROM curriculum.service_heartbeat": [
+        _agent("docker-agent:1", "45b3940aaaaa"),
+        _agent("mac-host:17164", "45b3940aaaaa", alter=30)]})
+    funde = alerts.pruefen(db, _cfg())
+    worker = [f for f in funde if f["art"] == "multiple_active_curriculum_workers"]
+    assert worker and worker[0]["schwere"] == "warn"
+    assert "docker-agent:1" in worker[0]["text"] and "mac-host:17164" in worker[0]["text"]
+
+
+def test_multiple_workers_mit_altem_stand_sind_hoch():
+    """Verschiedene git_sha unter den Schreibern: der alte schreibt veraltet."""
+    db = FakeDB(**{"FROM curriculum.service_heartbeat": [
+        _agent("docker-agent:1", "45b3940aaaaa"),
+        _agent("mac-host:17164", "e57d5c4bbbbb")]})
+    funde = alerts.pruefen(db, _cfg())
+    worker = [f for f in funde if f["art"] == "multiple_active_curriculum_workers"]
+    assert worker and worker[0]["schwere"] == "hoch"
+
+
+def test_ein_agent_je_umgebung_bleibt_ruhig():
+    """Ein Entwickler-Agent in „entwicklung" ist kein Produktions-Ghost."""
+    db = FakeDB(**{"FROM curriculum.service_heartbeat": [
+        _agent("docker-agent:1", "45b3940aaaaa", env="produktion"),
+        _agent("mac-host:17164", "45b3940aaaaa", env="entwicklung")]})
+    funde = alerts.pruefen(db, _cfg())
+    assert not any(f["art"] == "multiple_active_curriculum_workers" for f in funde)

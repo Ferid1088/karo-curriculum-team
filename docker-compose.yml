@@ -86,6 +86,8 @@ services:
     build: .
     command: ["serve"]
     env_file: .env
+    environment:
+      KCTEAM_ENV: produktion        # Worker-Identitaet: doctor trennt sie von lokalen Entwickler-Agents
     logging: *app-logging
     restart: unless-stopped
     stop_grace_period: 60s        # laufende KI-Aufrufe sauber beenden
@@ -106,6 +108,7 @@ services:
       KCTEAM_API_HOST: 0.0.0.0
       KCTEAM_API_PORT: "8088"
       KCTEAM_API_WORKERS: ${KCTEAM_API_WORKERS:-2}
+      KCTEAM_ENV: produktion
     logging: *app-logging
     restart: unless-stopped
     depends_on:
@@ -128,6 +131,7 @@ services:
       ADMIN_HOST: 0.0.0.0
       ADMIN_PORT: "8090"
       KARO_DB_PATH: ${KARO_DB_PATH:-/karo/karo.db}
+      KCTEAM_ENV: produktion
     logging: *app-logging
     restart: on-failure:3
     depends_on:

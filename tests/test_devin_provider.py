@@ -719,3 +719,55 @@ def test_inspektion_teilt_nach_gemessener_grenze():
                      run_id="t", log=lambda *_: None)
     pipe2.inspect("export", "E2", "final", "8", content, round_=1)
     assert len(prov2.systeme) == 1         # 19k < 20k-Pauschalbudget
+
+
+# ------------------------------------------------------------ Vertragsfassung
+def _fertig_machen(p, vertrag, result=None, restarts=0):
+    """Erst den echten call_key anlegen lassen, dann als fertig markieren."""
+    with pytest.raises(ProviderPending):
+        _call(p)
+    key = next(iter(p._mem))
+    p._mem[key].update(status="finished",
+                       result=result if result is not None else {"konzept_id": "X"},
+                       contract_version=vertrag, restarts=restarts)
+    return key
+
+
+def test_gleiche_vertragsfassung_serviert_den_cache():
+    from kcteam.lessons import CONTRACT_VERSION
+    remote = {}
+    p = DevinFake({}, remote=remote)
+    _fertig_machen(p, CONTRACT_VERSION)
+    creates = len(p._http.posts())
+    comp = _call(p)
+    assert json.loads(comp.text) == {"konzept_id": "X"}
+    assert len(p._http.posts()) == creates        # kein Neubau, kein Poll
+
+
+def test_legacy_ergebnis_darf_nach_aktueller_pruefung_dienen():
+    """Rows von vor dem Feld: contract_version NULL. Das Ergebnis wird
+    serviert — die Format- und Inhaltspruefung des Aufrufers entscheidet
+    danach aktuell, ob es taugt."""
+    p = DevinFake({}, remote={})
+    _fertig_machen(p, None)
+    assert json.loads(_call(p).text) == {"konzept_id": "X"}
+
+
+def test_fremde_vertragsfassung_wird_nicht_still_serviert():
+    """Ein Ergebnis aus v1.x darf nie still als v1.y-Material gelten:
+    begrenzter Neubau wie bei einer verlorenen Session."""
+    remote = {}
+    p = DevinFake({"max_session_restarts": 1}, remote=remote)
+    key = _fertig_machen(p, "karo-adaptiv-v9.9")
+    with pytest.raises(ProviderPending):
+        _call(p)
+    assert len(remote) == 2                        # neue Session angelegt
+    assert p._mem[key]["status"] == "working" and p._mem[key]["restarts"] == 1
+
+
+def test_fremde_vertragsfassung_ohne_restart_schlaegt_definiert_fehl():
+    p = DevinFake({"max_session_restarts": 0}, remote={})
+    _fertig_machen(p, "karo-adaptiv-v9.9")
+    with pytest.raises(ProviderError, match="Vertrag"):
+        _call(p)
+

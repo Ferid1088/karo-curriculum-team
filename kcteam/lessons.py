@@ -451,21 +451,29 @@ def promote_waiting(db) -> int:
     return moved
 
 
-def claim_export(db) -> dict | None:
+def claim_export(db, worker: str | None = None) -> dict | None:
     """Die naechste Lektion – die am ehesten gebraucht wird, nicht die aelteste.
 
     Bei siebzehn Prüfungsthemen wartete das Thema fuer die Arbeit am Freitag
     hinter dem fuer die Arbeit in drei Wochen. Ein Datum macht daraus eine
     Reihenfolge, die sich einer Familie erklaeren laesst. Ohne Datum heisst
     nicht dringend, nicht unwichtig: es kommt danach, in der alten Ordnung.
+
+    `worker` ist die Instanz des klaemenden Prozesses (hostname:pid): mit
+    Stand und Vertragsfassung laesst sich jede Lektion auf den Code
+    zurueckfuehren, der sie erzeugt hat — bei zwei gleichzeitigen Workern
+    sieht man am Export, wer gebaut hat.
     """
+    from . import version
     rows = db.query("""UPDATE curriculum.lesson_exports SET status='running', attempts=attempts+1,
-                         heartbeat_at=now(), updated_at=now()
+                         heartbeat_at=now(), updated_at=now(),
+                         claimed_by_run_id=%(w)s, generator_git_sha=%(sha)s, contract_version=%(cv)s
                        WHERE id = (SELECT id FROM curriculum.lesson_exports
                                    WHERE status='queued' AND next_attempt_at <= now()
                                    ORDER BY needed_by NULLS LAST, id
                                    FOR UPDATE SKIP LOCKED LIMIT 1)
-                       RETURNING *""")
+                       RETURNING *""",
+                    {"w": worker, "sha": version.GIT_SHA, "cv": CONTRACT_VERSION})
     return rows[0] if rows else None
 
 
@@ -501,13 +509,15 @@ def finish_export(db, eid: int, status: str, lesson: Any = None, reason_code: st
                   message: str | None = None, only_from: tuple[str, ...] | None = None) -> bool:
     """Setzt den Stand. `only_from`: nur aus diesen Ständen – der Worker schreibt nur über 'running', damit ein
     verspäteter Worker keine menschliche Entscheidung überschreibt."""
+    from . import version
     allowed = list(only_from) if only_from else None
     return bool(db.query(
         """UPDATE curriculum.lesson_exports SET status=%s, lesson=coalesce(%s, lesson), reason_code=%s,
-             message=%s, updated_at=now(), finished_at=CASE WHEN %s THEN now() ELSE finished_at END
+             message=%s, updated_at=now(), finished_at=CASE WHEN %s THEN now() ELSE finished_at END,
+             completed_by_run_id=%s
            WHERE id=%s AND (%s::text[] IS NULL OR status = ANY(%s::text[])) RETURNING id""",
         (status, Jsonb(lesson) if lesson is not None else None, reason_code, (message or "")[:500] or None,
-         status in FINAL, eid, allowed, allowed)))
+         status in FINAL, version.INSTANCE, eid, allowed, allowed)))
 
 
 def requeue_stale_exports(db, minutes: int = 15, max_attempts: int = 3) -> int:

@@ -17,7 +17,7 @@ from typing import Any, Callable
 
 import psycopg
 
-from . import lessons
+from . import lessons, version
 from .agents import BudgetExhausted
 from .providers.base import ProviderPending
 from .kontingent import KontingentErschoepft
@@ -286,7 +286,7 @@ class CurriculumAgent:
             return False
         if self.process_export():
             return True
-        req = self.db.claim_request()
+        req = self.db.claim_request(worker=version.INSTANCE)
         if not req:
             return False
         self.log(f"\n▶ Auftrag #{req['id']}: {req['subject']} Kl. {req['grade']} – „{req['topic']}“ "
@@ -340,7 +340,7 @@ class CurriculumAgent:
 
     # ------------------------------------------------------------ Lektionen im Format des Abnehmers
     def process_export(self) -> bool:
-        row = lessons.claim_export(self.db)
+        row = lessons.claim_export(self.db, worker=version.INSTANCE)
         if not row:
             return False
         self.log(f"\n▶ Lektion #{row['id']}: {row['concept_id']} Kl. {row['grade']} im Format „{row['format_id']}“")
@@ -384,6 +384,8 @@ class CurriculumAgent:
         team = SubjectTeam.for_subject(subj["name"] if subj else "Allgemein")
         g = row["grade"]
         run_id = self.db.start_run(team.name, (g, g), self.provider.name)
+        self.db.query("""UPDATE curriculum.lesson_exports SET run_id=%s, provider=%s
+                         WHERE id=%s""", (run_id, self.provider.name, row["id"]))
         pipe = Pipeline(cfg=self.cfg, provider=self.provider, db=self.db, run_id=run_id, karo_spec=self.karo_spec,
                         log=self.log, team=team)
         self.current_export = pipe

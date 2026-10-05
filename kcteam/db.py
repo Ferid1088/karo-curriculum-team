@@ -488,11 +488,12 @@ class DB:
                       WHERE id = ANY(%s)""", (terms, list(concept_ids)))
 
     # ---------------- Aufträge an den Curriculum-Agenten ----------------
-    def claim_request(self) -> dict | None:
+    def claim_request(self, worker: str | None = None) -> dict | None:
         # 'ready' + stage 'resume': Karo nutzt das Konzept schon, nur das Vervollständigen wird fortgesetzt
         rows = self.query("""UPDATE curriculum.topic_requests SET started_at=now(), heartbeat_at=now(),
                                     status = CASE WHEN status='ready' THEN 'ready' ELSE 'running' END,
-                                    attempts = attempts + 1, stage='match', updated_at=now()
+                                    attempts = attempts + 1, stage='match', updated_at=now(),
+                                    claimed_by_run_id=%(w)s
                              WHERE id = (SELECT id FROM curriculum.topic_requests
                                          WHERE (status='queued' OR (status='ready' AND stage='resume'))
                                            AND next_attempt_at <= now()
@@ -501,7 +502,7 @@ class DB:
                                          -- Ohne Datum heisst nicht dringend.
                                          ORDER BY needed_by NULLS LAST, priority DESC, created_at
                                          FOR UPDATE SKIP LOCKED LIMIT 1)
-                             RETURNING *""")
+                             RETURNING *""", {"w": worker})
         return rows[0] if rows else None
 
     def update_request(self, rid: int, **fields) -> None:
@@ -515,12 +516,15 @@ class DB:
     def finish_request(self, rid: int, status: str, concepts: list[str] | None = None,
                        reason_code: str | None = None, message: str | None = None) -> None:
         """Abschluss: Aufgaben des Arbeitsblatts löschen (Datenschutz) und Karo benachrichtigen."""
+        from . import version
         final = status in ("done", "blocked", "rejected", "failed")
         self.query("""UPDATE curriculum.topic_requests SET status=%s, result_concepts=coalesce(%s, result_concepts),
                         reason_code=%s, message=%s, stage=NULL, updated_at=now(),
                         finished_at = CASE WHEN %s THEN now() ELSE finished_at END,
-                        tasks = CASE WHEN %s THEN '[]'::jsonb ELSE tasks END
-                      WHERE id=%s""", (status, concepts, reason_code, message, final, final, rid))
+                        tasks = CASE WHEN %s THEN '[]'::jsonb ELSE tasks END,
+                        completed_by_run_id=%s
+                      WHERE id=%s""",
+                   (status, concepts, reason_code, message, final, final, version.INSTANCE, rid))
         payload = {"request_id": rid, "status": status, "concepts": concepts or [], "reason_code": reason_code}
         import json as _json
         self.query("SELECT pg_notify('karo_topic_ready', %s)", (_json.dumps(payload),))

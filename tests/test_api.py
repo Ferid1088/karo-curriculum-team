@@ -558,6 +558,27 @@ def test_the_queue_serves_the_nearest_exam_first(env):
     db.query("DELETE FROM curriculum.lesson_exports WHERE id = ANY(%s)", (genommen,))
 
 
+def test_claim_schreibt_die_werkspur(env):
+    """Der Claim vermerkt Instanz, Stand und Vertragsfassung — damit jede
+    Lektion auf den Code zurueckfuehrbar ist, der sie erzeugt hat."""
+    from kcteam import version
+    api, key, db = env["api"], env["key"], env["db"]
+    db.query("DELETE FROM curriculum.lesson_exports WHERE concept_id='MA.ZAHLEN.ZR100'")
+    antwort = api.post("/v1/lessons", json=lesson_body(
+        grade=2, concept_id="MA.ZAHLEN.ZR100", topic="werkspur"),
+        headers=h(key)).json()
+    assert antwort["status"] == "pending", antwort
+    row = lessons.claim_export(db, worker="testwerk:1")
+    assert row["claimed_by_run_id"] == "testwerk:1"
+    assert row["generator_git_sha"] == version.GIT_SHA
+    assert row["contract_version"] == lessons.CONTRACT_VERSION
+    lessons.finish_export(db, row["id"], "failed", reason_code="test")
+    fertig = db.one("SELECT completed_by_run_id FROM curriculum.lesson_exports WHERE id=%s",
+                    (row["id"],))
+    assert fertig["completed_by_run_id"] == version.INSTANCE
+    db.query("DELETE FROM curriculum.lesson_exports WHERE id=%s", (row["id"],))
+
+
 def test_an_earlier_exam_moves_a_shared_topic_forward(env):
     """Ein Thema, zwei Familien: das fruehere Datum gilt.
 

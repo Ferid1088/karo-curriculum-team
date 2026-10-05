@@ -83,6 +83,17 @@ def _key(provider: str, model: str, system: str, user: str) -> str:
     return hashlib.sha256("\x00".join([provider, model, system, user]).encode()).hexdigest()
 
 
+def _vertrag() -> str:
+    """Die Vertragsfassung, unter der ein Ergebnis erzeugt wurde.
+
+    Lazy import: `providers` importiert dieses Modul beim Paket-Start, und
+    `lessons` importiert `agents`, das `providers` importiert — ein Import
+    oben wuerde den Kreis schliessen.
+    """
+    from ..lessons import CONTRACT_VERSION
+    return CONTRACT_VERSION
+
+
 class DevinProvider(Provider):
     def __init__(self, settings: dict):
         super().__init__(name="devin", settings=settings, required_env=("DEVIN_API_KEY",))
@@ -173,10 +184,12 @@ class DevinProvider(Provider):
                               "created_ts": time.time()}
             return
         self._db.query("""INSERT INTO curriculum.provider_sessions
-                            (call_key, provider, session_id, role, entity_id, status)
-                          VALUES (%s, 'devin', %s, %s, %s, 'working')
+                            (call_key, provider, session_id, role, entity_id, status,
+                             contract_version)
+                          VALUES (%s, 'devin', %s, %s, %s, 'working', %s)
                           ON CONFLICT (call_key) DO NOTHING""",
-                       (key, sid, meta.get("role"), meta.get("entity_id")))
+                       (key, sid, meta.get("role"), meta.get("entity_id"),
+                        _vertrag()))
 
     def _mark(self, key: str, status: str, **fields) -> None:
         import json as _json
@@ -201,8 +214,9 @@ class DevinProvider(Provider):
             return
         self._db.query("""UPDATE curriculum.provider_sessions
                              SET session_id=%s, status='working', nudged=false,
-                                 restarts=restarts+1, updated_at=now()
-                           WHERE call_key=%s""", (sid, key))
+                                 restarts=restarts+1, contract_version=%s,
+                                 updated_at=now()
+                           WHERE call_key=%s""", (sid, _vertrag(), key))
 
     def _retried(self, key: str, sid: str) -> None:
         """Abgekuehlter Neustart einer aufgegebenen Zeile: neue Session, die
@@ -215,8 +229,9 @@ class DevinProvider(Provider):
             return
         self._db.query("""UPDATE curriculum.provider_sessions
                              SET session_id=%s, status='working', nudged=false, restarts=0,
-                                 missing_remote=0, detail=NULL, result=NULL, updated_at=now()
-                           WHERE call_key=%s""", (sid, key))
+                                 missing_remote=0, detail=NULL, result=NULL,
+                                 contract_version=%s, updated_at=now()
+                           WHERE call_key=%s""", (sid, _vertrag(), key))
 
     @staticmethod
     def _failed_age(row: dict) -> float:
@@ -310,6 +325,27 @@ class DevinProvider(Provider):
             raise ProviderPending(f"Devin-Session {sid} nach Abkuehlung neu gestartet",
                                   wait_seconds=self.poll_seconds, session_id=sid)
         if row["status"] == "finished":
+            vertrag = row.get("contract_version")
+            if vertrag is not None and vertrag != _vertrag():
+                # Das Ergebnis stammt aus einer anderen Vertragsfassung:
+                # nicht still wiederverwenden — die Zeile geht in den
+                # begrenzten Neustart-Pfad, wie eine verlorene Session.
+                # NULL heisst „aus einer Fassung vor diesem Feld": die
+                # Ergebnispruefung des Aufrufers entscheidet dort aktuell.
+                if int(row.get("restarts") or 0) < self.max_restarts:
+                    sid = self._create(system, user, meta)
+                    self._restarted(key, sid)
+                    log.warning("devin_result_stale session_id=%s entity_id=%s "
+                                "contract=%s (aktuell: %s)", row["session_id"],
+                                meta.get("entity_id"), vertrag, _vertrag())
+                    raise ProviderPending(
+                        f"Devin-Session {sid} neu (Ergebnis aus Vertrag {vertrag})",
+                        wait_seconds=self.poll_seconds, session_id=sid)
+                self._mark(key, "failed",
+                           detail=f"Ergebnis aus Vertrag {vertrag}, Neustart erschöpft")
+                raise ProviderError(
+                    f"Devin-Session {row['session_id']}: Ergebnis aus Vertrag "
+                    f"{vertrag} — unbrauchbar, Neustarts erschöpft", retryable=False)
             # Endzustand: das Ergebnis liegt lokal — kein Neubau, kein Poll,
             # auch wenn die Session remote laengst weg ist.
             result = row.get("result")

@@ -130,6 +130,36 @@ def pruefen(db, cfg) -> list[dict]:
     except Exception:
         pass
     try:
+        # Der Schaden vom 4.10.: ein zweiter Agent mit altem Code schrieb
+        # gleichzeitig mit dem echten in dieselbe Queue. Zwei lebende
+        # Instanzen desselben Dienstes in einer Umgebung sind kein
+        # Feature — verschiedene Staende machen es zum Notfall.
+        from . import version
+        aktive = db.query(
+            """SELECT instance, hostname, git_sha, environment,
+                      extract(epoch FROM now() - last_seen)::int AS alter_s
+                 FROM curriculum.service_heartbeat
+                WHERE service='agent'
+                  AND last_seen > now() - make_interval(secs => %s)""",
+            (version.FRISCH_SEKUNDEN,))
+        umgebungen: dict[str, list] = {}
+        for r in aktive:
+            umgebungen.setdefault(r["environment"], []).append(r)
+        for umgebung, instanzen in umgebungen.items():
+            if len(instanzen) < 2:
+                continue
+            wer = ", ".join(f"{i['instance']} ({i['git_sha'][:12]}, "
+                            f"{i['alter_s']}s alt)" for i in instanzen)
+            vermischt = len({i["git_sha"] for i in instanzen}) > 1
+            fundstellen.append({
+                "art": "multiple_active_curriculum_workers",
+                "schwere": "hoch" if vermischt else "warn",
+                "text": f"{len(instanzen)} Agenten aktiv in „{umgebung}“: {wer}"
+                        + (" — verschiedene Staende, einer schreibt alt"
+                           if vermischt else "")})
+    except Exception:
+        pass
+    try:
         sessions = db.query(
             """SELECT missing_remote FROM curriculum.provider_sessions
                 ORDER BY created_at DESC LIMIT 50""")

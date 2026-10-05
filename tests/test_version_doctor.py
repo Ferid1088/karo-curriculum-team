@@ -26,11 +26,13 @@ def db():
     return d
 
 
-def _melden(db, dienst, sha, alter_s=0):
-    db.query("""INSERT INTO curriculum.service_heartbeat(service, git_sha, contract_version, pid, last_seen)
-                VALUES (%s,%s,%s,1, now() - make_interval(secs => %s))
-                ON CONFLICT (service) DO UPDATE SET git_sha=EXCLUDED.git_sha, last_seen=EXCLUDED.last_seen""",
-             (dienst, sha, "karo-adaptiv-v1.1", alter_s))
+def _melden(db, dienst, sha, alter_s=0, instance="test:1", umgebung="produktion"):
+    db.query("""INSERT INTO curriculum.service_heartbeat
+                  (service, instance, git_sha, contract_version, pid, environment, last_seen)
+                VALUES (%s,%s,%s,%s,1,%s, now() - make_interval(secs => %s))
+                ON CONFLICT (service, instance) DO UPDATE
+                  SET git_sha=EXCLUDED.git_sha, last_seen=EXCLUDED.last_seen""",
+             (dienst, instance, sha, "karo-adaptiv-v1.1", umgebung, alter_s))
 
 
 def test_gleicher_stand_ist_in_ordnung(db):
@@ -83,6 +85,45 @@ def test_melden_schreibt_den_eigenen_stand(db):
     version.melden(db, "cli")
     row = db.one("SELECT * FROM curriculum.service_heartbeat WHERE service='cli'")
     assert row["git_sha"] == version.GIT_SHA and row["pid"] == os.getpid()
+    assert row["instance"] == version.INSTANCE
+
+
+def test_zwei_aktive_agents_sind_der_ghost(db):
+    """Der Schaden vom 4.10.: ein zweiter Worker mit altem Code schrieb
+    gleichzeitig mit — doctor muss zwei lebende Instanzen eines Dienstes
+    in derselben Umgebung finden."""
+    _melden(db, "api", "abc123def456", instance="docker:1")
+    _melden(db, "agent", "abc123def456", instance="docker:7")
+    _melden(db, "agent", "abc123def456", instance="macbook:17164")
+    _melden(db, "admin", "abc123def456", instance="docker:9")
+    ok, zeilen = version.befund(db)
+    assert not ok
+    assert any("2× aktiv" in z and "agent" in z for z in zeilen)
+
+
+def test_ghost_mit_anderem_stand_faellt_doppelt_auf(db):
+    """Zweiter Worker UND anderer Stand — beides sichtbar, nicht nur eins."""
+    _melden(db, "api", "neu0000neu00", instance="docker:1")
+    _melden(db, "agent", "neu0000neu00", instance="docker:7")
+    _melden(db, "agent", "alt0000alt00", instance="macbook:17164")
+    _melden(db, "admin", "neu0000neu00", instance="docker:9")
+    ok, zeilen = version.befund(db)
+    assert not ok
+    assert any("2× aktiv" in z for z in zeilen)
+    assert any("Verschiedene Staende" in z for z in zeilen)
+
+
+def test_agent_in_anderer_umgebung_ist_kein_ghost(db):
+    """Ein Entwickler-Agent auf seiner Umgebung schreibt nicht in die
+    Produktions-Queue-Identitaet — doctor meldet ihn, verwechselt ihn
+    aber nicht mit einem zweiten Produktivschreiber."""
+    _melden(db, "api", "abc123def456", instance="docker:1")
+    _melden(db, "agent", "abc123def456", instance="docker:7")
+    _melden(db, "agent", "abc123def456", instance="macbook:17164",
+            umgebung="entwicklung")
+    _melden(db, "admin", "abc123def456", instance="docker:9")
+    ok, zeilen = version.befund(db)
+    assert ok, zeilen
 
 
 def test_doctor_bricht_ab_wenn_die_staende_auseinanderlaufen(db, monkeypatch, capsys):
