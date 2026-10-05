@@ -328,6 +328,29 @@ def test_maximales_session_alter_begrenzt_warten():
     assert exc.value.retryable is False and "älter" in str(exc.value)
 
 
+def test_aufgegebene_session_bekommt_nach_abkuehlung_neuen_versuch():
+    """EXP-200/207: eine failed Session-Zeile sperrte denselben logischen
+    Auftrag dauerhaft — jedes neue Thema-Request fiel sofort auf
+    'aufgegeben', ohne je beim Anbieter anzukommen. Nach der Abkuehlzeit
+    bekommt der Auftrag eine neue Session; frisch gescheitert bleibt gesperrt."""
+    remote = {}
+    p = DevinFake({"failed_retry_seconds": 10}, remote=remote)
+    with pytest.raises(ProviderPending):
+        _call(p)
+    key = next(iter(p._mem))
+    p._mem[key].update(status="failed", detail="Status expired", restarts=1)
+    # frisch gescheitert: noch gesperrt, kein neuer Create
+    with pytest.raises(ProviderError, match="aufgegeben"):
+        _call(p)
+    assert len(p._http.posts()) == 1
+    # abgekuehlt: neue Session, Zaehler von vorn
+    p._mem[key]["created_ts"] = time.time() - 60
+    with pytest.raises(ProviderPending):
+        _call(p)
+    assert len(p._http.posts()) == 2
+    assert p._mem[key]["restarts"] == 0 and p._mem[key]["status"] == "working"
+
+
 @pytest.mark.parametrize("resp, retryable, limited", [
     (Resp(429, headers={"retry-after": "30"}), True, True),
     (Resp(500), True, False),

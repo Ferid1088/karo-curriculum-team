@@ -100,6 +100,9 @@ class DevinProvider(Provider):
         # und ein haengender Server darf den Worker nicht unbegrenzt halten.
         self.connect_timeout_s = float(settings.get("connect_timeout_s", 10))
         self.max_restarts = int(settings.get("max_session_restarts", 1))
+        #: Aufgegebene Sessions sperren denselben logischen Auftrag nicht
+        #: fuer immer — nach der Abkuehlzeit bekommt er eine neue Session.
+        self.failed_retry_seconds = int(settings.get("failed_retry_seconds", 1800))
         self.max_acu = settings.get("max_acu_limit")          # optionaler Kostenrahmen pro Session
         self._db = None
         self._mem: dict[str, dict] = {}                        # Ersatz ohne Datenbank (Tests)
@@ -201,6 +204,29 @@ class DevinProvider(Provider):
                                  restarts=restarts+1, updated_at=now()
                            WHERE call_key=%s""", (sid, key))
 
+    def _retried(self, key: str, sid: str) -> None:
+        """Abgekuehlter Neustart einer aufgegebenen Zeile: neue Session, die
+        Restart- und 404-Zaehler beginnen von vorn."""
+        if self._db is None:
+            row = self._mem.get(key)
+            if row is not None:
+                row.update(session_id=sid, status="working", nudged=False, restarts=0,
+                           missing_remote=0, detail=None, result=None, created_ts=time.time())
+            return
+        self._db.query("""UPDATE curriculum.provider_sessions
+                             SET session_id=%s, status='working', nudged=false, restarts=0,
+                                 missing_remote=0, detail=NULL, result=NULL, updated_at=now()
+                           WHERE call_key=%s""", (sid, key))
+
+    @staticmethod
+    def _failed_age(row: dict) -> float:
+        ts = row.get("updated_at") or row.get("created_at") or row.get("created_ts")
+        if isinstance(ts, (int, float)):
+            return time.time() - float(ts)
+        if hasattr(ts, "timestamp"):
+            return time.time() - ts.timestamp()
+        return 0.0
+
     # ------------------------------------------------------------- Devin-Aktionen
     def _create(self, system: str, user: str, meta: dict) -> str:
         """Session anlegen. Gibt die session_id zurück."""
@@ -271,8 +297,18 @@ class DevinProvider(Provider):
             raise ProviderPending(f"Devin-Session {sid} läuft", wait_seconds=self.poll_seconds,
                                   session_id=sid)
         if row["status"] == "failed":
-            raise ProviderError(f"Devin-Session {row['session_id']} aufgegeben: {row.get('detail')}",
-                                retryable=False)
+            if self._failed_age(row) < self.failed_retry_seconds:
+                raise ProviderError(f"Devin-Session {row['session_id']} aufgegeben: {row.get('detail')}",
+                                    retryable=False)
+            # Abgekuehlt: denselben logischen Auftrag noch einmal versuchen —
+            # sonst bleibt ein Thema wegen eines vergangenen Remote-Fehlers
+            # fuer immer unlieferbar (PH.GESCHWINDIGKEIT, EXP-200/207).
+            sid = self._create(system, user, meta)
+            self._retried(key, sid)
+            log.info("devin_request_started session_id=%s retry=abgekuehlt entity_id=%s",
+                     sid, meta.get("entity_id"))
+            raise ProviderPending(f"Devin-Session {sid} nach Abkuehlung neu gestartet",
+                                  wait_seconds=self.poll_seconds, session_id=sid)
         if row["status"] == "finished":
             # Endzustand: das Ergebnis liegt lokal — kein Neubau, kein Poll,
             # auch wenn die Session remote laengst weg ist.
