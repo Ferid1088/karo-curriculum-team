@@ -44,3 +44,7 @@ pythonpath = ["."]
 # daneben (fuer den Vertragstest); ohne diese Zeile sammelt pytest dessen
 # Tests gleich mit und fuehrt sie im falschen Arbeitsverzeichnis aus.
 testpaths = ["tests"]
+addopts = "-m 'not perf'"
+markers = [
+    "perf: Zeitmessungen — laufen nur mit `pytest -m perf`, die Funktionssuite misst keine Uhr",
+]
