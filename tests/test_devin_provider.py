@@ -656,6 +656,23 @@ class _InspektorProv(_Aufzeichner):
         return Completion(text='{"decision":"approved","findings":[],"summary":"ok"}', model="t")
 
 
+def test_uebergroesse_wird_lokal_gemeldet_nicht_versandt():
+    """EXP-205: ein Budget-Modellfehler liess einen 29.805-Zeichen-Auftrag
+    bis zum Anbieter laufen. Die _call-Wache misst den echten Auftrag
+    (System + Nutzer + Anbieterrahmen) und meldet lokal — der Anbieter
+    wird nie angerufen."""
+    prov = _Aufzeichner(native=True)
+    prov.prompt_limit = 29_500
+    prov.prompt_overhead = 500
+    runner = _runner(prov)
+    import pytest as _pt
+    from kcteam.agents import AgentFailed
+    with _pt.raises(AgentFailed, match="lokal gemessen"):
+        runner.call_json("lektionsautor", "t" * 100, {"daten": "x" * 40_000},
+                         {"type": "object"}, lambda x: x, entity_id="E")
+    assert prov.systeme == []            # kein einziger Versandversuch
+
+
 def test_inspektion_teilt_nach_gemessener_grenze():
     """EXP-205 Regression: _INHALT_BUDGET=20k zaehlte nur den Inhalt —
     mit System-Auftrag (~10k) und Wiederholungs-Anhang lief ein einzelnes

@@ -278,6 +278,19 @@ class AgentRunner:
             if last_error:
                 prompt += ("\n\n## Deine letzte Antwort war ungültig\n" + last_error[:1500] +
                            "\nAntworte nur mit gültigem JSON nach Schema.")
+            # Letzte Wache vor dem Versand: die Budget-Rechnung der Auftraggeber
+            # modelliert den Auftrag — gemessen wird hier das Echte. Was die
+            # Grenze ueberschreitet, wird als lokaler Befund gemeldet, nicht
+            # erst beim Anbieter (EXP-205: 29.805 Zeichen trotz Budgetierung).
+            limit = getattr(self.provider, "prompt_limit", None)
+            if limit:
+                groesse = (len(system) + len(prompt)
+                           + int(getattr(self.provider, "prompt_overhead", 0) or 0))
+                if groesse > limit:
+                    raise AgentFailed(
+                        f"{ROLES[role]}: Auftrag hat {groesse} Zeichen — ueber der Grenze von {limit} "
+                        f"(lokal gemessen: system={len(system)} nutzer={len(prompt)}).",
+                        stage=stage)
             try:
                 comp, started = self._complete(role=role, system=system, prompt=prompt, model=model,
                                                web_search=web_search, meta={**meta, "attempt": attempt},

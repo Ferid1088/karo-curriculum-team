@@ -717,6 +717,21 @@ def generate(pipe, db, row: dict) -> tuple[str, Any, str | None]:
         # ueber die Anbietergrenze (zweimal live geschehen, EXP-201/204).
         nutzdaten = (_im_budget(data, _grundlage_budget(pipe, spec, extra, task, fb))
                      if fb else data)
+        # Letzte Passung gegen den echten Auftragsrahmen, nicht gegen das
+        # Budget-Modell: EXP-205 lief mit 29.805 Zeichen ueber die Grenze,
+        # weil das Modell einen Festteil unterschaetzt hatte. Gemessen wird
+        # dieselbe Huelse, die agents._call um die Nutzdaten legt.
+        limit = getattr(pipe.agents.provider, "prompt_limit", None)
+        if limit:
+            rahmen = f"## Auftrag\n{task}\n\n## Daten\n```json\n\n```"
+            if fb:
+                rahmen += ("\n\n## Rückmeldung, die du vollständig umsetzen musst\n" + fb[:FEEDBACK_MAX]
+                           + "\n\nGib das vollständige, überarbeitete JSON-Objekt zurück.")
+            uebrig = (limit - _RETRY_RESERVE
+                      - int(getattr(pipe.agents.provider, "prompt_overhead", 0) or 0)
+                      - pipe.agents.system_laenge("lektionsautor", spec["schema"], extra)
+                      - len(rahmen))
+            nutzdaten = _im_budget(nutzdaten, max(_GRUNDLAGE_MINIMUM, uebrig))
         return pipe.agents.call_json(
             "lektionsautor", task,
             nutzdaten, spec["schema"], validate, entity_id=eid, feedback=fb, extra_system=extra, stage="lesson",
