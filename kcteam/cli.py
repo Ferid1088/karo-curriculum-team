@@ -531,12 +531,15 @@ def cmd_serve(cfg, args) -> int:
     if _abnehmer_pruefbar():
         return 1
     print(version.startmeldung("agent"))
-    version.puls(lambda: db, "agent")
+    puls_halt = version.puls(lambda: db, "agent")
     print(f"▶ Curriculum-Agent läuft (Provider {provider_name}). Wartet auf Aufträge von Karo …")
     try:
         agent.serve(once=args.once)
     except KeyboardInterrupt:
         stop()
+    finally:
+        puls_halt.set()
+        version.abmelden(db, "agent")
     db.close_all()
     return 0
 

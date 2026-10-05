@@ -126,6 +126,16 @@ def test_agent_in_anderer_umgebung_ist_kein_ghost(db):
     assert ok, zeilen
 
 
+def test_abmelden_raeumt_nur_die_eigene_zeile(db):
+    """Geordneter Stopp: der eigene Puls verschwindet sofort — doctor soll
+    nach einem sauberen Deploy keinen toten Schreiber mehr sehen."""
+    version.melden(db, "agent")
+    _melden(db, "agent", "abc123def456", instance="fremd:9")
+    version.abmelden(db, "agent")
+    rest = {r["instance"] for r in version.laufende(db) if r["service"] == "agent"}
+    assert rest == {"fremd:9"}
+
+
 def test_api_repliken_sind_keine_ghosts(db):
     """Die API laeuft mit KCTEAM_API_WORKERS=2 als zwei Prozesse — nur der
     Schreiber (agent) darf genau einmal existieren."""

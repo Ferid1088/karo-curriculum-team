@@ -87,6 +87,17 @@ def puls(db_holen, dienst: str, takt: int = 60):
     return halt
 
 
+def abmelden(db, dienst: str) -> None:
+    """Geordneter Abschied: die eigene Zeile geht sofort, nicht erst nach
+    dem Frischefenster — sonst meldet doctor nach jedem sauberen Deploy
+    noch Minuten lang einen toten Schreiber als zweiten."""
+    try:
+        db.query("""DELETE FROM curriculum.service_heartbeat
+                     WHERE service=%s AND instance=%s""", (dienst, INSTANCE))
+    except Exception as exc:                      # noqa: BLE001
+        log.debug("Abmeldung %s: %s", dienst, exc)
+
+
 def startmeldung(dienst: str) -> str:
     from . import lessons
     return (f"kcteam {dienst}: Stand {GIT_SHA[:12]}, Vertrag {lessons.CONTRACT_VERSION}, "
