@@ -744,13 +744,17 @@ def test_gleiche_vertragsfassung_serviert_den_cache():
     assert len(p._http.posts()) == creates        # kein Neubau, kein Poll
 
 
-def test_legacy_ergebnis_darf_nach_aktueller_pruefung_dienen():
+def test_legacy_ergebnis_darf_nach_aktueller_pruefung_dienen(caplog):
     """Rows von vor dem Feld: contract_version NULL. Das Ergebnis wird
     serviert — die Format- und Inhaltspruefung des Aufrufers entscheidet
-    danach aktuell, ob es taugt."""
+    danach aktuell, ob es taugt. Der Zugriff wird gezaehlt, damit der
+    Altbestand sichtbar auslaeuft statt unsichtbar weiterzuleben."""
+    import logging
     p = DevinFake({}, remote={})
     _fertig_machen(p, None)
-    assert json.loads(_call(p).text) == {"konzept_id": "X"}
+    with caplog.at_level(logging.INFO, logger="kcteam.devin"):
+        assert json.loads(_call(p).text) == {"konzept_id": "X"}
+    assert any("legacy_cache_access" in r.message for r in caplog.records)
 
 
 def test_fremde_vertragsfassung_wird_nicht_still_serviert():

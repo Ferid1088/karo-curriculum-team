@@ -348,6 +348,14 @@ class DevinProvider(Provider):
                     f"{vertrag} — unbrauchbar, Neustarts erschöpft", retryable=False)
             # Endzustand: das Ergebnis liegt lokal — kein Neubau, kein Poll,
             # auch wenn die Session remote laengst weg ist.
+            if vertrag is None:
+                # Altbestand aus der Zeit vor dem Vertragsfeld: der Zugriff
+                # wird gezaehlt (legacy_session_accessed), damit sichtbar
+                # bleibt, wie oft er noch dient und ob er sich lohnt.
+                # Gestempelt wird er nicht — erst die Ergebnispruefung des
+                # Aufrufers zeigt, ob er zur aktuellen Fassung taugt.
+                log.info("legacy_cache_access session_id=%s entity_id=%s action=served",
+                         row["session_id"], meta.get("entity_id"))
             result = row.get("result")
             if isinstance(result, (dict, list)):
                 return Completion(text=json.dumps(result, ensure_ascii=False),
