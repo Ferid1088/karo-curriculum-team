@@ -12,3 +12,6 @@ output/
 # Datenbank-Abzuege vor einem Eingriff. Daten, kein Quelltext —
 # und nichts, was in ein Repository gehoert.
 backups/
+
+# Laufzeit-Artefakte des Bild-Providers (generiert, keine Quellen).
+image_assets/

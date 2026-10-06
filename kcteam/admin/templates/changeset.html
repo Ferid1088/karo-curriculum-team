@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}Change-Set {{ s.id }}{% endblock %}
+{% block main %}
+<h1>Change-Set {{ s.id }} <span class="pill s-{{ s.status }}">{{ s.status }}</span></h1>
+<div class="note">{{ s.summary or "" }} · {{ s.provider or "manuell" }} {{ s.model or "" }} · {{ s.created_at.strftime('%d.%m.%y %H:%M') if s.created_at }}</div>
+<div class="scroll"><table><thead><tr><th>Op</th><th>Eintrag</th><th>Vorschlag</th><th>Diff</th><th>Entscheidung</th></tr></thead><tbody>
+{% for c in changes %}<tr>
+<td><span class="pill s-{{ c.op }}">{{ c.op }}</span></td>
+<td class="small">{{ c.item_id or "–" }}</td>
+<td>{{ c.proposed.title if c.proposed else "" }}<br><span class="small muted">{{ c.proposed.id if c.proposed else "" }}</span></td>
+<td class="small">{{ c.diff_note }}</td>
+<td>{{ c.decision }}</td></tr>{% endfor %}
+</tbody></table></div>
+{% if s.status == 'staged' %}
+<form method="post" action="/factory/changesets/{{ s.id }}/entscheiden" style="margin-top:1em">
+<button name="decision" value="approve">Alle freigeben</button>
+<button name="decision" value="reject">Ablehnen</button>
+<span class="small muted">Freigabe schreibt in den Bestand (nur hier schreibt das Admin).</span>
+</form>
+{% endif %}
+{% endblock %}

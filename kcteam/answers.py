@@ -138,6 +138,9 @@ class AnswerConceptRubric(BaseModel):
     correct (alle bzw. `min_required` Konzepte) · partial (`partial_min`
     Treffer) · misconception (bekannte Fehlvorstellung, Vorrang vor Treffern)
     · unknown (nichts Einzuordnendes → `clarification`, niemals falsch).
+
+    Bewertungsreihenfolge (deterministisch):
+    unknown_markers → misconception → contradiction → Konzeptabdeckung.
     """
     type: Literal["concept_rubric"]
     required_concepts: list[ConceptSpec | str] = Field(min_length=1, max_length=8)
@@ -147,6 +150,18 @@ class AnswerConceptRubric(BaseModel):
     partial_min: int = Field(1, ge=1,
                              description="ab so vielen Treffern gilt 'partial'")
     misconceptions: list[MisconceptionSpec] = Field(default_factory=list, max_length=8)
+    contradictions: list[MisconceptionSpec] = Field(
+        default_factory=list, max_length=8,
+        description="Formulierungen, die dem Konzept aktiv widersprechen → incorrect")
+    unknown_markers: list[str] = Field(
+        default_factory=lambda: ["weiß nicht", "weiss nicht", "keine ahnung",
+                                 "kein plan", "verstehe nicht", "?"],
+        max_length=12,
+        description="Ausdruecke des Nichtwissens → unknown statt falsch")
+    normalization: list[str] = Field(
+        default_factory=lambda: ["lower", "umlauts", "punctuation", "articles", "typo"],
+        max_length=8,
+        description="verfuegbar: lower, umlauts, punctuation, articles, typo")
     clarification: ClarificationTask | None = None
     sample_answer: str | None = Field(None, max_length=1500)
     max_words: int | None = None

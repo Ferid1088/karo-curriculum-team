@@ -18,7 +18,11 @@ from .base import Completion, Provider, ProviderError
 
 class ClaudeTokenProvider(Provider):
     def __init__(self, settings: dict):
-        super().__init__(name="claude_token", settings=settings, required_env=("CLAUDE_CODE_OAUTH_TOKEN",))
+        # Das OAuth-Token ist NUR in nicht-interaktiven Umgebungen (Docker/CI)
+        # nötig: sonst authentifiziert sich die CLI über ihre eigene Anmeldung
+        # (Schlüsselbund). Erzwingen, dass beides fehlt, würde eine funktio-
+        # nierende Installation als "nicht verfügbar" melden.
+        super().__init__(name="claude_token", settings=settings)
 
     def available(self) -> tuple[bool, str]:
         ok, msg = super().available()
@@ -26,6 +30,8 @@ class ClaudeTokenProvider(Provider):
             return ok, msg
         if not shutil.which("claude"):
             return False, "claude CLI nicht installiert (npm i -g @anthropic-ai/claude-code)"
+        if not os.environ.get("CLAUDE_CODE_OAUTH_TOKEN"):
+            return True, "ok (CLI-Anmeldung; kein Token gesetzt – Docker braucht claude setup-token)"
         return True, "ok"
 
     def complete(self, *, system, user, model, web_search=False, meta=None) -> Completion:

@@ -21,7 +21,7 @@ class AnthropicAPIProvider(Provider):
         messages = [{"role": "user", "content": user}]
         kwargs = dict(
             model=model,
-            max_tokens=int(self.settings.get("max_tokens", 16000)),
+            max_tokens=int((meta or {}).get("max_tokens") or self.settings.get("max_tokens", 16000)),
             # System-Prompt ist pro Rolle identisch -> Cache spart bei tausenden Aufrufen den Großteil der Kosten
             system=[{"type": "text", "text": system, "cache_control": {"type": "ephemeral"}}],
         )

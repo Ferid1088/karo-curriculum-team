@@ -71,22 +71,50 @@ def _num(v) -> dict:
     return {"type": "number", "value": v}
 
 
-def _fill(schema: dict):
-    """Minimales Objekt, das ein (einfaches) JSON-Schema erfüllt."""
-    t = schema.get("type")
+def _fill(schema: dict, defs: dict | None = None, _tiefe: int = 0):
+    """Minimales Objekt, das ein JSON-Schema erfüllt.
+
+    Löst $ref gegen $defs auf und wählt bei anyOf/oneOf den ersten Zweig –
+    das reicht für Pydantic-generierte Schemas der Fabrikrollen."""
+    if _tiefe > 12:
+        return "Beispieltext"
+    defs = defs if defs is not None else schema.get("$defs", {})
+    if "$ref" in schema:
+        name = schema["$ref"].rsplit("/", 1)[-1]
+        return _fill(defs.get(name, {"type": "string"}), defs, _tiefe + 1)
+    for kombi in ("anyOf", "oneOf", "allOf"):
+        if kombi in schema:
+            for zweig in schema[kombi]:
+                wert = _fill(zweig, defs, _tiefe + 1)
+                if wert is not None or zweig.get("type") != "null":
+                    return wert
+            return None
+    if "const" in schema:
+        return schema["const"]
     if "enum" in schema:
         return schema["enum"][0]
-    if t == "object":
+    t = schema.get("type")
+    if isinstance(t, list):
+        t = next((x for x in t if x != "null"), t[0])
+    if t == "object" or "properties" in schema:
         props = schema.get("properties") or {}
-        return {k: _fill(props.get(k, {"type": "string"})) for k in schema.get("required", list(props))}
+        out = {}
+        for k in schema.get("required", list(props)):
+            v = _fill(props.get(k, {"type": "string"}), defs, _tiefe + 1)
+            if v is not None:
+                out[k] = v
+        return out
     if t == "array":
-        return [_fill(schema.get("items") or {"type": "string"}) for _ in range(schema.get("minItems", 1))]
+        n = schema.get("minItems", 1)
+        return [_fill(schema.get("items") or {"type": "string"}, defs, _tiefe + 1) for _ in range(min(n, 2))]
     if t == "integer":
         return schema.get("minimum", 1)
     if t == "number":
         return schema.get("minimum", 1)
     if t == "boolean":
         return True
+    if t == "null":
+        return None
     return "Beispieltext"
 
 
@@ -98,10 +126,19 @@ class MockProvider(Provider):
     def complete(self, *, system, user, model, web_search=False, meta=None) -> Completion:
         meta = meta or {}
         role = meta.get("role")
-        handler = getattr(self, f"_{role}")
+        handler = getattr(self, f"_{role}", self._generic)
         data = handler(meta)
         return Completion(text="```json\n" + json.dumps(data, ensure_ascii=False) + "\n```",
                           input_tokens=len(system + user) // 4, output_tokens=200, model="mock")
+
+    def _generic(self, meta):
+        """Rueckfall fuer Rollen ohne eigenen Mock: das mitgeschickte
+        JSON-Schema minimal erfuellen. Fuer Pipeline- und Fabrikrollen, deren
+        Verhalten die e2e-Ueberpruefung nicht nachspielt."""
+        schema = meta.get("json_schema") or {}
+        if schema:
+            return _fill(schema)
+        return {"ok": True}
 
     # ---------------- Rollen ----------------
     def _curriculum_analyst(self, meta):
@@ -347,8 +384,220 @@ class MockProvider(Provider):
                     {"frage": "Darf ich zählen?", "antwort": "Ja, Zählen hilft am Anfang."}],
         }
 
+    # ---------------- Fabrik-Rollen (PART 58): ein stimmiges Minipaket,
+    # damit der e2e-Schnitt offline laeuft. Inhaltlich ein Bruch-Thema;
+    # das Thema kommt aus meta["payload"]["thema"].
+    def _thema(self, meta):
+        return (meta.get("payload") or {}).get("thema") or {"id": "T", "title": "Thema",
+                                                            "subject_code": "MA", "grade": 6}
+
+    def _katalog_rechercheur(self, meta):
+        scope = (meta.get("payload") or {}).get("auswahl") or {}
+        subs = scope.get("subjects") or ["MA"]
+        grades = scope.get("grades") or [6]
+        items = []
+        for s in subs:
+            for g in grades:
+                items.append({
+                    "id": f"DE.{s}.{g}.GRUNDLAGEN", "kind": "topic",
+                    "title": f"{s} Klasse {g}: Grundlagen", "description": "Mock-Recherche",
+                    "subject_code": s, "grade": g, "framework": scope.get("framework", "de-kmk"),
+                    "country": "DE", "region": scope.get("region", ""),
+                    "school_type": scope.get("school_type", ""), "path": [s, f"Klasse {g}"],
+                    "sort_order": g, "origin": "agent_research",
+                    "source": "KMK-Bildungsstandards (Mock)", "source_version": "2018",
+                    "source_reference": "Abschnitt Grundwissen", "confidence": 0.6})
+        return {"items": items, "summary": "Mock-Recherche ueber die Auswahl"}
+
+    def _kompetenz_architekt(self, meta):
+        t = self._thema(meta)
+        return {"target_competencies": [f"Das Kind kann {t['title']} sicher anwenden."],
+                "prerequisite_graph": {"edges": [
+                    {"target_id": f"{t['subject_code']}.GRUNDLAGEN.ZAHLEN", "kind": "necessary",
+                     "return_condition": "mastery", "resume_level": 0}]},
+                "competency_ladder": [
+                    {"level_id": 0, "goal": "Grundidee verstehen", "exit_criteria": "2x richtig",
+                     "next_level": 1, "allowed_task_types": ["WORKED", "GUIDED", "INDEPENDENT"]},
+                    {"level_id": 1, "goal": f"{t['title']} sicher", "next_level": None,
+                     "allowed_task_types": ["GUIDED", "INDEPENDENT", "TRANSFER", "MASTERY_CHECK"]}],
+                "teaching_strategies": {"0": ["WORKED", "GUIDED"], "1": ["INDEPENDENT", "TRANSFER"]}}
+
+    def _fehlvorstellungs_analytiker(self, meta):
+        return {"misconception_model": [
+            {"misconception_id": "F1", "description": "ueblicher Anfaengerfehler zu diesem Thema",
+             "likely_cause": "uebereiltes Rechnen", "repair_explanation": "Schritt fuer Schritt.",
+             "observable_answer_patterns": ["2/5"],
+             "guided_repair": ["G1"], "independent_check": ["I1"],
+             "resolution_evidence": "I1 ohne Hilfe richtig"}]}
+
+    def _didaktik_designer(self, meta):
+        return {"teaching_strategies": {"0": ["WORKED", "GUIDED", "INDEPENDENT"],
+                                        "1": ["GUIDED", "INDEPENDENT", "TRANSFER", "MASTERY_CHECK"]}}
+
+    def _erklaerautor(self, meta):
+        t = self._thema(meta)
+        return {"explanations": [
+            {"mode": "rule", "text": f"Regel zu {t['title']}: Schritt fuer Schritt."},
+            {"mode": "intuitive", "text": "Stell dir eine Pizza vor, die du teilst."},
+            {"mode": "example", "text": "Zum Beispiel: 2 + 3 = 5."},
+            {"mode": "misconception_specific", "text": "F1 repariert: nicht einfach ueberall addieren.",
+             "for_misconception": "F1"}]}
+
+    def _visueller_lerndesigner(self, meta):
+        return {"visual_need": "DETERMINISTIC_DIAGRAM",
+                "visual_na_reason": "",
+                "visual_assets": [
+                    {"asset_id": "V1", "visual_type": "DETERMINISTIC_DIAGRAM",
+                     "learning_goal": "Teile sehen",
+                     "what_child_should_notice": "gleich grosse Teile",
+                     "structured_data": {"type": "fraction_bar",
+                                          "bars": [{"numerator": 1, "denominator": 2}]},
+                     "accessibility_text": "Ein halb gefuellter Balken"},
+                    {"asset_id": "IMG1", "visual_type": "ILLUSTRATIVE_IMAGE",
+                     "learning_goal": "Motivation: Brueche im Alltag",
+                     "accessibility_text": "Kuchen, der in gleiche Stuecke geteilt wird",
+                     "fallback_text": "Stell dir einen Kuchen in vier Teilen vor."}]}
+
+    def _aufgaben_designer(self, meta):
+        def t(tid, role, lvl, prompt, value, **kw):
+            d = {"task_id": tid, "role": role, "level_id": lvl, "prompt": prompt,
+                 "answer": {"type": "fraction", "value": value}, "solution": value}
+            d.update(kw)
+            return d
+        return {"tasks": [
+            t("W1", "WORKED", 0, "Vorgefuehrt: 1/2 = ?/4", "2/4"),
+            t("D1", "MISCONCEPTION_PROBE", 1, "Was ist 1/2 + 1/3?", "5/6",
+              misconception="F1",
+              distractors=[{"answer": "2/5", "misconception": "F1",
+                            "feedback": "Zaehler und Nenner einzeln addiert."}]),
+            t("G1", "GUIDED", 0, "1/3 = ?/6", "2/6", hints={"hints": ["Wie kommt 3 auf 6?"]}),
+            t("I1", "INDEPENDENT", 0, "2/5 = ?/10", "4/10"),
+            t("G2", "GUIDED", 1, "1/2 + 1/4", "3/4",
+              hints={"hints": ["Hauptnenner?", "1/2 = 2/4"]},
+              distractors=[{"answer": "2/6", "misconception": "F1"}]),
+            t("I2", "INDEPENDENT", 1, "1/3 + 1/6", "1/2",
+              distractors=[{"answer": "2/9", "misconception": "F1"}]),
+            t("TR1", "TRANSFER", 1, "Ein halber Becher + ein Viertel Becher", "3/4"),
+            t("M1", "MASTERY_CHECK", 1, "2/3 + 1/6", "5/6"),
+            t("M2", "MASTERY_CHECK", 1, "1/5 + 3/10", "1/2"),
+            t("P1", "PREREQUISITE_PROBE", 1, "1/4 + 1/4", "1/2",
+              prerequisite_id="MA.GRUNDLAGEN.ZAHLEN"),
+            t("R1", "SPACED_REVIEW", 1, "1/2 + 1/3", "5/6"),
+            {"task_id": "E_FTK1", "role": "INDEPENDENT", "level_id": 1,
+             "prompt": "Erklaere in eigenen Worten, warum 1/2 + 1/3 nicht 2/5 ist.",
+             "answer": {"type": "free_text",
+                        "rubric": [{"criterion": "Hauptnenner genannt", "points": 2}],
+                        "pass_points": 1,
+                        "sample_answer": "Man muss erst auf den Hauptnenner bringen."},
+             "solution": "Nenner muessen gleich sein."}]}
+
+    def _vorlagen_ingenieur(self, meta):
+        return {"task_templates": [
+            {"template_id": "T_GLEICHN", "role": "GUIDED", "level_id": 0,
+             "prompt_template": "Erweitere 1/{a} auf Zwanzigstel?",
+             "parameters": {"a": {"type": "int_range", "min": 2, "max": 10}},
+             "constraints": ["20 % a == 0"],
+             "solution": "fr(20 // a, 20)", "answer_type": "fraction",
+             "max_variants": 4},
+            {"template_id": "T_ADD", "role": "INDEPENDENT", "level_id": 1,
+             "prompt_template": "Was ist 1/{a} + 1/{b}?",
+             "parameters": {"a": {"type": "int_range", "min": 2, "max": 9},
+                            "b": {"type": "int_range", "min": 2, "max": 9}},
+             "constraints": ["a != b"], "solution": "fr(1, a) + fr(1, b)",
+             "answer_type": "fraction",
+             "distractor_exprs": {"F1": "fr(2, a+b)"}, "max_variants": 20}]}
+
+    def _lernreise_architekt(self, meta):
+        return {"rules": [], "detours": [],
+                "role_order": ["WORKED", "GUIDED", "INDEPENDENT", "TRANSFER", "MASTERY_CHECK"],
+                "max_attempts_per_task": 3, "max_unknown_per_task": 2, "max_no_progress": 14}
+
+    def _fachexperte(self, meta):
+        return {"verdict": "PASS", "issues": []}
+
+    def _pruefungs_designer(self, meta):
+        return {"tasks": [
+            {"task_id": "E1", "role": "EXAM_PRACTICE", "level_id": 1,
+             "prompt": "Klassenarbeit: 3/8 + 1/4", "answer": {"type": "fraction", "value": "5/8"},
+             "solution": "5/8"}]}
+
+    def _curriculum_kritiker(self, meta):
+        return {"issues": []}
+
+    def _vollstaendigkeits_kontrolleur(self, meta):
+        payload = meta.get("payload", {})
+        if "manifest" in payload:
+            # Fabrik-Endkontrolle: PASS, wenn die Simulationen sauber sind.
+            sims = payload.get("simulationen", {})
+            bad = [p for p, o in sims.items() if o in ("DEAD_END", "STEP_LIMIT")]
+            if bad:
+                return {"verdict": "REPAIR_REQUIRED",
+                        "findings": [{"component": "journey",
+                                      "severity": "blocker",
+                                      "detail": f"Simulationen fehlerhaft: {bad}",
+                                      "stage": "journey"}]}
+            return {"verdict": "PASS", "findings": []}
+        return {"items": [], "coverage": {}}
+
+    def _rubrik_ingenieur(self, meta):
+        """Rubrik-Vertrag fuer Aufgaben ohne haerten Antworttyp: scannt die
+        bisherigen Aufgaben und liefert Konzept-Rubriken."""
+        payload = meta.get("payload", {})
+        bp = payload.get("bisheriges_paket", {})
+        tasks = list((bp.get("tasks") or {}).get("tasks", []))
+        tasks += bp.get("tasks_retention") or []
+        rubrics = []
+        for t in tasks:
+            ans = t.get("answer")
+            if ans is None or ans.get("type") in ("free_text", "text",
+                                                  "concept_rubric"):
+                rubrics.append({
+                    "task_id": t["task_id"],
+                    "required_concepts": [
+                        {"concept": "Hauptnenner",
+                         "accepted": ["gleichnamig", "gemeinsamer Nenner"]}],
+                    "optional_concepts": [],
+                    "partial_min": 1,
+                    "misconceptions": [{"patterns": ["oben plus oben"],
+                                        "misconception": "F1"}],
+                    "contradictions": [],
+                    "unknown_markers": ["keine ahnung", "weiss nicht"],
+                    "normalization": ["lower", "umlauts", "punctuation",
+                                      "articles", "typo"],
+                    "clarification": {
+                        "prompt": "Was meinst du genau?",
+                        "options": [
+                            {"text": "Ich soll den Nenner erklaeren", "correct": True},
+                            {"text": "Ich soll den Zaehler erklaeren",
+                             "correct": False, "misconception": None}]}})
+        return {"rubrics": rubrics}
+
+    def _bildprompt_designer(self, meta):
+        asset = (meta.get("payload", {}) or {}).get("asset", {})
+        goal = asset.get("learning_goal", "Lernmotiv")
+        return {"prompt": f"Kindgerechte sachliche Illustration, flacher "
+                          f"Stil, ohne Text im Bild: {goal}",
+                "negative_prompt": "Text, Marken, Gewalt, realistische Menschen",
+                "alt_text": f"Illustration: {goal}"}
+
+    def _visueller_inspektor(self, meta):
+        return {"approved": True, "findings": [], "alt_text_ok": True}
+
+    def _lernsimulator(self, meta):
+        return {"profile": "AVERAGE", "event_sequence": [], "expected_outcome": "MASTERED",
+                "observed_problem": ""}
+
     def _kinderrechts_inspektor(self, meta):
-        content = json.dumps(meta.get("payload", {}).get("inhalt", {}), ensure_ascii=False)
+        payload = meta.get("payload", {})
+        if "bisheriges_paket" in payload or "thema" in payload:
+            # Fabrik-Kontext: Stufe 'inspector' erwartet IssuesOut (verdict/issues)
+            content = json.dumps(payload, ensure_ascii=False)
+            issues = []
+            if "Nutella" in content or "Wette" in content:
+                issues.append({"where": "tasks", "problem": "Marken/Gluecksspiel im Kontext",
+                               "severity": "blocker", "fix_vorschlag": "neutralen Kontext waehlen"})
+            return {"verdict": "FAIL" if issues else "PASS", "issues": issues}
+        content = json.dumps(payload.get("inhalt", {}), ensure_ascii=False)
         findings = []
         if "Nutella" in content:
             findings.append({"location": "anchor_items[1].prompt", "rule": "Werbung / Marken",

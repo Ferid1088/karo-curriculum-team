@@ -340,6 +340,87 @@ def create_app(db: DB | None = None, karo_db: str | None = None,
             erst = [dict(r) for r in con.execute("SELECT * FROM lern_erstkontakt WHERE konzept_id=?", (kid,))]
         return render(request, "karo_konzept.html", k=dict(k), fehler=fehler, hilfe=hilfe, erst=erst)
 
+    # ------------------------------------------------------------ Fabrik
+    @app.get("/factory/katalog", response_class=HTMLResponse)
+    def factory_katalog(request: Request, subject: str = "", grade: str = "", _u: str = Depends(auth)):
+        d = pg()
+        rows = d.query("""SELECT id, kind, title, subject_code, grade, status, origin, source,
+                                 confidence, path
+                          FROM curriculum.catalog_items
+                          WHERE (%s='' OR subject_code=%s) AND (%s='' OR grade=%s::int)
+                          ORDER BY subject_code, grade NULLS FIRST, sort_order, id LIMIT 500""",
+                       (subject, subject, grade, grade or 0))
+        staged = d.query("""SELECT id, status, summary, provider, model, created_at,
+                                   (SELECT count(*) FROM curriculum.catalog_changes c
+                                     WHERE c.change_set_id=s.id AND c.op<>'UNCHANGED') AS ops
+                            FROM curriculum.catalog_change_sets s ORDER BY id DESC LIMIT 30""")
+        return render(request, "list.html", title="Themenkatalog (freigegebener Bestand)",
+                      rows=rows, links={"id": "factory/packages"},
+                      note=f"{len(staged)} Change-Sets zuletzt – Diff-Prüfung unter /factory/changesets")
+
+    @app.get("/factory/changesets", response_class=HTMLResponse)
+    def factory_changesets(request: Request, _u: str = Depends(auth)):
+        rows = pg().query("""SELECT id, status, scope, summary, provider, model, decided_by, created_at
+                             FROM curriculum.catalog_change_sets ORDER BY id DESC LIMIT 100""")
+        return render(request, "list.html", title="Gestufte Katalog-Aenderungen", rows=rows,
+                      note="Ein Set zeigt den Diff; freigeben/auswaehlen im Detail.")
+
+    @app.get("/factory/changesets/{sid}", response_class=HTMLResponse)
+    def factory_changeset(request: Request, sid: int, _u: str = Depends(auth)):
+        d = pg()
+        s = d.one("SELECT * FROM curriculum.catalog_change_sets WHERE id=%s", (sid,))
+        if not s:
+            raise HTTPException(404)
+        changes = d.query("SELECT * FROM curriculum.catalog_changes WHERE change_set_id=%s ORDER BY id", (sid,))
+        return render(request, "changeset.html", s=s, changes=changes)
+
+    @app.post("/factory/changesets/{sid}/entscheiden")
+    async def factory_changeset_decide(request: Request, sid: int, _u: str = Depends(auth)):
+        """Die zweite Schreib-Ausnahme: ein Mensch gibt den gestuften Diff
+        frei oder lehnt ihn ab – wie „Wieder freigeben" bei den Lektionen."""
+        from .. import catalog as cat
+        form = await request.form()
+        decision = str(form.get("decision", ""))
+        if decision not in ("approve", "reject"):
+            raise HTTPException(400, "decision muss approve oder reject sein")
+        res = cat.decide_change_set(pg_write(), sid, approve=(decision == "approve"),
+                                    decided_by=_u)
+        return RedirectResponse(f"/factory/changesets/{sid}?ok={res['status']}", 303)
+
+    @app.get("/factory/packages", response_class=HTMLResponse)
+    def factory_packages(request: Request, status: str = "", _u: str = Depends(auth)):
+        rows = pg().query("""SELECT topic_id, status, contract_version, topic_version, content_version,
+                                    fail_reason, updated_at
+                             FROM curriculum.complete_packages
+                             WHERE (%s='' OR status=%s) ORDER BY updated_at DESC LIMIT 300""",
+                          (status, status))
+        return render(request, "list.html", title="Komplettpakete", rows=rows,
+                      links={"topic_id": "factory/packages"}, filter_status=status,
+                      statuses=["CATALOG_ONLY", "BUILDING", "PARTIAL", "READY_CORE",
+                                "READY_COMPLETE", "OUTDATED", "REVIEW_REQUIRED", "FAILED", "BLOCKED"])
+
+    @app.get("/factory/packages/{topic_id}", response_class=HTMLResponse)
+    def factory_package(request: Request, topic_id: str, _u: str = Depends(auth)):
+        d = pg()
+        p = d.one("SELECT * FROM curriculum.complete_packages WHERE topic_id=%s", (topic_id,))
+        if not p:
+            raise HTTPException(404)
+        stages = d.query("""SELECT stage, status, detail, updated_at FROM curriculum.package_stages
+                            WHERE topic_id=%s ORDER BY updated_at""", (topic_id,))
+        qe = (p.get("content") or {}).get("quality_evidence") if p.get("content") else None
+        sims = (qe or {}).get("simulations") or None
+        return render(request, "factory_package.html", p=p, stages=stages, qe=qe, sims=sims)
+
+    @app.get("/factory/jobs", response_class=HTMLResponse)
+    def factory_jobs(request: Request, _u: str = Depends(auth)):
+        rows = pg().query("""SELECT j.id, j.status, j.mode, j.estimate, j.confirmed_by, j.stats,
+                                    j.created_at, j.finished_at,
+                                    (SELECT count(*) FROM curriculum.bulk_job_items i WHERE i.job_id=j.id) AS themen,
+                                    (SELECT count(*) FROM curriculum.bulk_job_items i WHERE i.job_id=j.id AND i.status='done') AS fertig
+                             FROM curriculum.bulk_jobs j ORDER BY j.id DESC LIMIT 100""")
+        return render(request, "list.html", title="Sammelauftraege", rows=rows,
+                      note="Anlegen & bestaetigen: kcteam factory bulk …")
+
     # ------------------------------------------------------------ alle Tabellen
     @app.get("/tables/{which}", response_class=HTMLResponse)
     def tables(request: Request, which: str, _u: str = Depends(auth)):

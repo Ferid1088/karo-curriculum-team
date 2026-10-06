@@ -693,6 +693,29 @@ def generate(pipe, db, row: dict) -> tuple[str, Any, str | None]:
     if c['version'] != row['concept_version']:
         return 'unavailable', None, 'concept_version_changed'
     row = {**row, 'grade': content_grade(c, row['grade'])}
+    # Fabrik-Schleife PART 14-16/36: ein READY_COMPLETE-Paket liefert die
+    # Lektion deterministisch — ohne Modellaufruf (reason_code 'from_package').
+    # Scheitert die Bruecke oder die Abnehmerpruefung, gilt das als Befund am
+    # Paket und es wird wie bisher generiert — still umgangen wird nichts.
+    from . import karo_bridge
+    pkg = karo_bridge.find_package(db, c["id"])
+    if pkg is not None:
+        try:
+            lesson = karo_bridge.package_to_lesson(
+                pkg, thema=row.get("topic") or c["title"],
+                einordnung=(c["first_contact_grade"], c["target_grade"]))
+            befunde = (check_lesson(lesson, spec)
+                       + consumer_findings(lesson, c, spec, version=c["version"],
+                                           topic=row.get("topic")))
+        except karo_bridge.BrueckeUnmoeglich as exc:
+            befunde = [str(exc)]
+        if befunde:
+            db.enqueue_human("export", f"EXP-{row['id']}", "package_bridge",
+                             f"Paket {pkg.catalog_alignment.item_id} liefert keine gueltige Lektion "
+                             f"({'; '.join(befunde)[:400]}) — generiere neu.",
+                             {}, kind="info")
+        else:
+            return "ready", lesson, "from_package"
     extra = ("## Format des Abnehmers\n### Register erlaubter Darstellungen\n```json\n" + compact(spec["registry"])
              + "\n```\n### Formatregeln des Abnehmers\n" + (spec["instructions"] or "(keine)"))
     task = (f"Schreibe die Lektion zum Konzept {c['id']} „{c['title']}“ für Klasse {row['grade']} "

@@ -52,8 +52,12 @@ class Config:
         return dict(self.raw.get("providers", {}).get(name, {}))
 
     def model_for(self, provider: str, role: str) -> str:
-        per_role = (self.raw.get("role_models", {}) or {}).get(provider, {}) or {}
-        return per_role.get(role) or self.provider_settings(provider).get("default_model", "")
+        from . import capabilities
+        return capabilities.model_for(self, provider, role)
+
+    def token_budget_for(self, role: str) -> int | None:
+        from . import capabilities
+        return capabilities.token_budget_for(self, role)
 
     def p(self, key: str, default: Any = None) -> Any:
         return self.pipeline.get(key, default)

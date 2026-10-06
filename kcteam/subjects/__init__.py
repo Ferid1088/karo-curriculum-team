@@ -58,6 +58,46 @@ def _norm(s: str) -> str:
     return re.sub(r"[^a-z0-9]", "", s)
 
 
+#: Fabrik-Rollen brauchen in jeder Faechergruppe Anweisungen, sind aber
+#: weitgehend fachunabhaengig. Diese Basistexte gelten ueberall; eine
+#: Familie kann sie gezielt ueberschreiben (YAML gewinnt).
+FACTORY_ROLE_DEFAULTS: dict[str, str] = {
+    "katalog_rechercheur": "Recherchiere nur offizielle Quellen dieses Fachs "
+        "(Lehrplan, Bildungsstandards, Fachkonferenz-Vorgaben). Provenienz pflicht.",
+    "kompetenz_architekt": "Zerlege das Thema in die fachueblichen Kompetenzen "
+        "dieser Faechergruppe; der Einstieg liegt dort, wo Kinder dieses Fach "
+        "typischerweise zuerst Beruehrung haben.",
+    "lernreise_architekt": "Waehle Rollenfolge und Uebergaenge passend zum "
+        "Uebungstyp des Fachs (Uebersetzung, Rechnen, Analyse …).",
+    "fachexperte": "Pruefe mit den Fachbegriffen und Verfahren dieser "
+        "Faechergruppe; fachliche Fehler sind Blocker.",
+    "fehlvorstellungs_analytiker": "Nutze die fuer dieses Fach dokumentierten "
+        "typischen Fehlvorstellungen; ergaenze nur, was Lernforschung stuetzt.",
+    "didaktik_designer": "Beispiele und Kontexte aus den Lebenswelten, die in "
+        "diesem Fach ueblich sind.",
+    "erklaerautor": "Erklaere mit den Erklaerungsmustern des Fachs "
+        "(Regel-Beispiel, Modell, Analogie).",
+    "aufgaben_designer": "Nutze die Aufgabenformate dieser Faechergruppe; "
+        "jede Aufgabe mit maschinell pruefbarer Antwort.",
+    "vorlagen_ingenieur": "Vorlagen ueber die Antwortformate des Fachs; "
+        "Bei Sprachen: set-Domanen mit Wort-/Satzbaenken statt Zahlen.",
+    "rubrik_ingenieur": "Rubriken bewerten fachliche Kriterien dieses Fachs.",
+    "visueller_lerndesigner": "Nutze die bevorzugten Visual-Typen dieser "
+        "Faechergruppe (siehe Liste im Profil).",
+    "bildprompt_designer": "Bilder in der Bildsprache des Fachs, kindgerecht, "
+        "ohne Text und Marken.",
+    "visueller_inspektor": "Pruefe Bilder gegen die fachliche Korrektheit "
+        "dieser Faechergruppe.",
+    "pruefungs_designer": "Pruefungsformen wie sie im Fach ueblich sind "
+        "(Klassenarbeit, Klausur, muendlich).",
+    "lernsimulator": "Simuliere die typischen Leistungsprofile dieses Fachs.",
+    "curriculum_kritiker": "Kritisiere fachliche und didaktische Luecken im "
+        "Paket, nicht Formalien.",
+    "vollstaendigkeits_kontrolleur": "Pruefe alle 28 Vertragskomponenten; "
+        "fachspezifische Pflichten des Profils mitzaehlen.",
+}
+
+
 @lru_cache(maxsize=1)
 def load_all() -> tuple[dict[str, SubjectProfile], dict[str, FamilyProfile]]:
     reg = yaml.safe_load((DIR / "registry.yaml").read_text(encoding="utf-8"))
@@ -65,6 +105,8 @@ def load_all() -> tuple[dict[str, SubjectProfile], dict[str, FamilyProfile]]:
     families = {}
     for f in sorted((DIR / "families").glob("*.yaml")):
         fam = FamilyProfile.model_validate(yaml.safe_load(f.read_text(encoding="utf-8")))
+        for role, text in FACTORY_ROLE_DEFAULTS.items():
+            fam.roles.setdefault(role, text)
         families[fam.id] = fam
     return subjects, families
 

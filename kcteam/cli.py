@@ -717,6 +717,238 @@ def cmd_bench(cfg, args) -> int:
     return 0 if p(0.95) < args.target and not errors else 2
 
 
+def _scope_from_args(args) -> "catalog.Scope":
+    from . import catalog
+    grades = []
+    if getattr(args, "grades", None):
+        g = _parse_grades(args.grades)
+        grades = list(range(g[0], g[1] + 1))
+    return catalog.Scope(
+        framework=getattr(args, "framework", "de-kmk") or "de-kmk",
+        region=getattr(args, "region", "") or "",
+        school_type=getattr(args, "school_type", "") or "",
+        grades=grades,
+        subjects=[s.strip().upper() for s in (getattr(args, "subjects", None) or "").split(",") if s.strip()],
+        topics=[t.strip() for t in (getattr(args, "topics", None) or "").split(",") if t.strip()])
+
+
+def cmd_katalog(cfg, args) -> int:
+    """Themenkatalog: Bestand, gestufte Recherche, manuelle Pflege."""
+    from . import catalog as cat
+    db = DB(cfg.database_url)
+    act = args.action
+    scope = _scope_from_args(args)
+    if act == "list":
+        rows = cat.resolve_scope(db, scope)
+        for r in rows:
+            print(f"  {r['id']:44} {r['kind']:10} Kl.{r['grade'] or '–':>2} {r['title']}")
+        print(f"{len(rows)} freigegebene Eintraege")
+        ov = cat.catalog_overview(db, scope)
+        for s in ov["staged_sets"]:
+            print(f"  gestuft: Set {s['id']} ({s['provider'] or '?'}): {s['pending_ops']} offene Ops – "
+                  f"kcteam katalog show {s['id']}")
+        return 0
+    if act == "stage":
+        # Recherche-Ergebnis einstellen: JSON-Datei mit Eintraegen (catalog_items-Form)
+        proposed = json.loads(Path(args.file).read_text(encoding="utf-8"))
+        if not isinstance(proposed, list):
+            raise ValueError("--file muss eine JSON-Liste von Eintraegen enthalten")
+        s = cat.stage_change_set(db, scope, proposed, summary=args.note or "")
+        offen = [c for c in s["changes"] if c["op"] != "UNCHANGED"]
+        print(f"✓ Change-Set {s['id']} gestuft: {len(offen)} Aenderungen, "
+              f"{len(s['changes']) - len(offen)} unveraendert")
+        print("  Pruefen: kcteam katalog show %d   Freigeben: kcteam katalog approve %d" % (s["id"], s["id"]))
+        return 0
+    if act == "research":
+        # Agenten-gestuetzte Recherche: Rolle fragt den Lehrplan ab, Ergebnis wird gestuft.
+        from .agents import AgentRunner
+        from pydantic import BaseModel, Field
+        provider = make_provider(args.provider or cfg.provider, cfg)
+        runner = AgentRunner(cfg=cfg, provider=provider, db=db, run_id=__import__("uuid").uuid4().hex)
+
+        class KatalogVorschlag(BaseModel):
+            items: list[dict] = Field(default_factory=list)
+            summary: str = ""
+
+        out = runner.call("katalog_rechercheur",
+                          f"Recherchiere den offiziellen Themenkatalog fuer die Auswahl {scope.__dict__}.",
+                          {"auswahl": scope.__dict__}, KatalogVorschlag,
+                          entity_id="catalog", web_search=True)
+        s = cat.stage_change_set(db, scope, out.items, agent_role="katalog_rechercheur",
+                                 provider=provider.name,
+                                 model=cfg.model_for(provider.name, "katalog_rechercheur"),
+                                 run_id=runner.run_id, summary=out.summary)
+        offen = [c for c in s["changes"] if c["op"] != "UNCHANGED"]
+        print(f"✓ Change-Set {s['id']} gestuft ({provider.name}): {len(offen)} Aenderungen")
+        return 0
+    if act == "show":
+        s = db.one("SELECT * FROM curriculum.catalog_change_sets WHERE id=%s", (int(args.set_id),))
+        if not s:
+            print("Change-Set unbekannt."); return 1
+        print(f"Set {s['id']} [{s['status']}] {s.get('summary') or ''}")
+        for c in db.query("SELECT * FROM curriculum.catalog_changes WHERE change_set_id=%s ORDER BY id",
+                          (s["id"],)):
+            if c["op"] == "UNCHANGED" and not args.all:
+                continue
+            p = c["proposed"] or {}
+            print(f"  #{c['id']:<4} {c['op']:10} {c.get('item_id') or p.get('id','?'):42} "
+                  f"{p.get('title','')[:50]}  {c['diff_note'][:60]}")
+        return 0
+    if act in ("approve", "reject"):
+        rej = [int(x) for x in (args.reject_ops or "").split(",") if x.strip()]
+        res = cat.decide_change_set(db, int(args.set_id), approve=(act == "approve"),
+                                    decided_by=args.who, rejected_ops=rej)
+        print(f"✓ {res}")
+        return 0
+    if act == "add":
+        item = {"id": args.id, "title": args.title, "kind": args.kind,
+                "subject_code": args.subjects.upper().split(",")[0],
+                "grade": int(args.grades) if args.grades else None,
+                "parent_id": args.parent, "description": args.description or "",
+                "path": args.title.split(" > ")}
+        cat.manual_add(db, item, decided_by=args.who)
+        print(f"✓ {args.id} angelegt")
+        return 0
+    if act == "edit":
+        fields = {k: v for k, v in {"title": args.title, "description": args.description,
+                                    "parent_id": args.parent}.items() if v}
+        cat.manual_edit(db, args.id, **fields)
+        print(f"✓ {args.id} geaendert")
+        return 0
+    if act in ("deactivate", "restore"):
+        cat.manual_deactivate(db, args.id, restore=(act == "restore"))
+        print(f"✓ {args.id}: {act}")
+        return 0
+    print("Aktionen: list | stage --file | research | show SET | approve SET [--reject-ops ids] | "
+          "reject SET | add | edit | deactivate | restore")
+    return 1
+
+
+def _make_factory(cfg, args):
+    from .factory import Factory
+    provider = make_provider(getattr(args, "provider", None) or cfg.provider, cfg)
+    return Factory(cfg=cfg, provider=provider, db=DB(cfg.database_url))
+
+
+def cmd_factory(cfg, args) -> int:
+    """Curriculum-Fabrik: Pakete bauen, Sammelauftraege, Abdeckung."""
+    from . import catalog as cat
+    from . import factory as fac
+    from .completeness import coverage_report
+    db = DB(cfg.database_url)
+    act = args.action
+    if act == "status":
+        rows = db.query("""SELECT p.topic_id, p.status, p.fail_reason, p.updated_at,
+                                  i.title, i.subject_code, i.grade
+                           FROM curriculum.complete_packages p
+                           LEFT JOIN curriculum.catalog_items i ON i.id=p.topic_id
+                           ORDER BY p.updated_at DESC LIMIT %s""", (args.limit,))
+        for r in rows:
+            print(f"  {r['status']:15} {r['topic_id']:44} {r['title'] or ''}  {r['fail_reason'] or ''}")
+        return 0
+    if act == "coverage":
+        scope = _scope_from_args(args)
+        topics = cat.resolve_scope(db, scope)
+        rep = coverage_report(db, [t["id"] for t in topics])
+        print(f"Themen: {rep['topics']}   fertig: {rep['ready_share']:.0%}")
+        for st, n in sorted(rep["by_status"].items()):
+            print(f"  {st:16} {n}")
+        if rep["weakest_components"]:
+            print("Schwaechste Komponenten:")
+            for c, n in rep["weakest_components"]:
+                print(f"  {n:4}x {c}")
+        return 0
+    if act == "build":
+        f = _make_factory(cfg, args)
+        for tid in args.topic_ids:
+            item = db.one("SELECT * FROM curriculum.catalog_items WHERE id=%s", (tid,))
+            if not item:
+                print(f"✗ {tid} nicht im Katalog"); continue
+            print(f"Baue {tid} ({item['title']}) …")
+            try:
+                res = f.build_topic(item, mode=args.mode,
+                                    components=(args.components.split(",") if args.components else None))
+            except BudgetExhausted as exc:
+                print(f"⏸ {exc} — fortsetzbar: erneut `factory build {tid}`")
+                return 2
+            print(f"  → {res['status']}" + (f"  (blockiert: {'; '.join(res['blocking'])})" if res["blocking"] else ""))
+        return 0
+    if act == "bulk":
+        scope = _scope_from_args(args)
+        topics = cat.resolve_scope(db, scope)
+        est = fac.estimate_job(topics, cfg)
+        print(f"Auswahl: {est['topics']} Themen · ~{est['calls_estimated']} Aufrufe · "
+              f"~{est['tokens_out_estimated']:,} Ausgabetokens · ~{est['cost_usd_estimated']} $")
+        if args.preview or not args.confirm:
+            print("Nur Vorschau. Ausfuehren mit --confirm <dein Name>.")
+            return 0
+        job_id = fac.create_bulk_job(db, scope, topics, mode=args.mode,
+                                     confirmed_by=args.confirm, estimate=est)
+        print(f"✓ Sammelauftrag {job_id} bestaetigt ({args.confirm}) – laeuft jetzt.")
+        f = _make_factory(cfg, args)
+        res = fac.run_bulk_job(f, job_id, limit=args.limit)
+        print(f"Fertig: {res}")
+        return 0
+    if act == "run-job":
+        f = _make_factory(cfg, args)
+        res = fac.run_bulk_job(f, int(args.job_id), limit=args.limit)
+        print(f"Auftrag {args.job_id}: {res}")
+        return 0
+    if act == "jobs":
+        for r in db.query("""SELECT id, status, mode, confirmed_by, created_at, finished_at
+                             FROM curriculum.bulk_jobs ORDER BY id DESC LIMIT 30"""):
+            print(f"  #{r['id']:<4} {r['status']:8} {r['mode']:20} von {r['confirmed_by'] or '–'}  {r['created_at']}")
+        return 0
+    if act == "preview":
+        # PART 32: ganze Stufe/Faechergruppe durchspielen, ohne auszufuehren.
+        scope = _scope_from_args(args)
+        topics = cat.resolve_scope(db, scope)
+        pkgs = {r["topic_id"]: r["status"] for r in db.query(
+            "SELECT topic_id, status FROM curriculum.complete_packages")}
+        groups: dict[str, list[str]] = {}
+        for t in topics:
+            groups.setdefault(pkgs.get(t["id"], "MISSING"), []).append(t["id"])
+        print(f"Scope: {len(topics)} Themen")
+        for st in ("READY_COMPLETE", "READY_CORE", "PARTIAL", "OUTDATED",
+                   "REVIEW_REQUIRED", "BLOCKED", "FAILED", "BUILDING", "MISSING"):
+            if st in groups:
+                print(f"  {st:15} {len(groups[st])}")
+        missing = [t for t in topics if pkgs.get(t["id"], "MISSING") in
+                   ("MISSING", "OUTDATED", "PARTIAL", "FAILED")]
+        est = fac.estimate_job(missing, cfg)
+        print(f"Bau nötig für {est['topics']} Themen · ~{est['calls_estimated']} Aufrufe · "
+              f"~{est['tokens_out_estimated']:,} Tokens · ~{est['cost_usd_estimated']} $")
+        print("Nur Vorschau – nichts wurde gestartet.")
+        return 0
+    if act == "cost":
+        # PART 39: gemessene Kosten je Thema aus den Agent-Calls der Laeufe.
+        for tid in args.topic_ids:
+            runs = db.query(
+                """SELECT DISTINCT run_id FROM curriculum.package_stages
+                   WHERE topic_id=%s AND run_id IS NOT NULL""", (tid,))
+            rids = [r["run_id"] for r in runs]
+            if not rids:
+                print(f"{tid}: keine Laeufe gefunden"); continue
+            rows = db.query(
+                """SELECT role, count(*) AS calls,
+                          sum(input_tokens) AS tin, sum(output_tokens) AS tout,
+                          sum(duration_ms) AS ms,
+                          sum(CASE WHEN ok THEN 0 ELSE 1 END) AS errors
+                   FROM curriculum.agent_calls WHERE run_id = ANY(%s)
+                   GROUP BY role ORDER BY tout DESC NULLS LAST""", (rids,))
+            tot_in = sum(r["tin"] or 0 for r in rows)
+            tot_out = sum(r["tout"] or 0 for r in rows)
+            print(f"{tid}: {tot_in + tot_out:,} Tokens "
+                  f"({tot_in:,} in / {tot_out:,} out) ueber {len(rids)} Lauf/Laeufe")
+            for r in rows:
+                print(f"  {r['role']:30} {r['calls']:3}x  "
+                      f"{(r['tin'] or 0) + (r['tout'] or 0):>9,} tok  "
+                      f"{(r['ms'] or 0) / 1000:7.1f}s  Fehler {r['errors']}")
+        return 0
+    print("Aktionen: build TOPIC… | status | coverage | bulk | run-job JOB | jobs | preview | cost TOPIC…")
+    return 1
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="kcteam", description="Karo Curriculum Team")
     parser.add_argument("--config", help="Pfad zu config.yaml")
@@ -829,6 +1061,47 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--concurrency", "-c", type=int, default=10)
     p.add_argument("--target", type=float, default=50, help="Ziel für p95 in ms")
 
+    p = sub.add_parser("katalog", help="Themenkatalog: Bestand, Recherche-Diffs, Pflege")
+    p.add_argument("action", choices=["list", "stage", "research", "show", "approve", "reject",
+                                      "add", "edit", "deactivate", "restore"])
+    p.add_argument("set_id", nargs="?", help="Change-Set-ID (show/approve/reject)")
+    p.add_argument("--file", "-f", help="JSON-Datei mit Eintraegen (stage)")
+    p.add_argument("--all", action="store_true", help="auch UNCHANGED anzeigen")
+    p.add_argument("--who", default="cli", help="Name der entscheidenden Person")
+    p.add_argument("--note", "-n", default="")
+    p.add_argument("--id", help="Eintrags-ID (add/edit/deactivate/restore)")
+    p.add_argument("--title", help="Titel (add/edit)")
+    p.add_argument("--kind", default="topic", help="Art (add)")
+    p.add_argument("--parent", help="Eltern-ID (add/edit)")
+    p.add_argument("--description", default="")
+    p.add_argument("--provider", "-p", choices=list(PROVIDERS))
+    # Auswahl-Filter (PART 3)
+    p.add_argument("--framework", default="de-kmk")
+    p.add_argument("--region", default="")
+    p.add_argument("--school-type", default="")
+    p.add_argument("--grades", "-g", default="")
+    p.add_argument("--subjects", "-s", default="", help="Fachkuerzel, Komma-getrennt")
+    p.add_argument("--topics", "-t", default="")
+
+    p = sub.add_parser("factory", help="Curriculum-Fabrik: Pakete bauen, Jobs, Abdeckung")
+    p.add_argument("action", choices=["build", "status", "coverage", "bulk",
+                                      "run-job", "jobs", "preview", "cost"])
+    p.add_argument("topic_ids", nargs="*", help="Katalog-IDs (build)")
+    p.add_argument("--job-id", help="Sammelauftrag (run-job)")
+    p.add_argument("--mode", default="missing",
+                   choices=["missing", "repair", "regenerate", "full_rebuild"])
+    p.add_argument("--components", help="Komma-Liste der Stufen (regenerate)")
+    p.add_argument("--confirm", help="Sammelauftrag bestaetigen (dein Name)")
+    p.add_argument("--preview", action="store_true")
+    p.add_argument("--limit", type=int, default=None)
+    p.add_argument("--provider", "-p", choices=list(PROVIDERS))
+    p.add_argument("--framework", default="de-kmk")
+    p.add_argument("--region", default="")
+    p.add_argument("--school-type", default="")
+    p.add_argument("--grades", "-g", default="")
+    p.add_argument("--subjects", "-s", default="")
+    p.add_argument("--topics", "-t", default="")
+
     sub.add_parser("providers", help="eingerichtete KI-Zugänge anzeigen")
     sub.add_parser("init-db", help="Datenbankschema anlegen")
 
@@ -843,7 +1116,8 @@ def main(argv: list[str] | None = None) -> int:
                 "catalog": cmd_catalog, "subjects": cmd_subjects, "check": cmd_check, "simulate": cmd_simulate,
                 "serve": cmd_serve, "request": cmd_request, "export-sqlite": cmd_export_sqlite, "requests": cmd_requests, "demand": cmd_demand,
                 "api": cmd_api, "rerender-visuals": cmd_rerender, "api-client": cmd_api_client, "admin": cmd_admin, "bench": cmd_bench,
-                "seed-slices": cmd_seed_slices, "gap-report": cmd_gap_report}
+                "seed-slices": cmd_seed_slices, "gap-report": cmd_gap_report,
+                "katalog": cmd_katalog, "factory": cmd_factory}
     try:
         return handlers[cmd](cfg, args)
     except psycopg.OperationalError as exc:

@@ -39,7 +39,7 @@ class OpenRouterProvider(Provider):
         try:
             resp = self.client.chat.completions.create(
                 model=model,
-                max_tokens=int(self.settings.get("max_tokens", 16000)),
+                max_tokens=int((meta or {}).get("max_tokens") or self.settings.get("max_tokens", 16000)),
                 messages=[{"role": "system", "content": system}, {"role": "user", "content": user}],
             )
         except Exception as exc:  # noqa: BLE001
@@ -74,6 +74,8 @@ class OpenAIProvider(Provider):
         kwargs = dict(model=model, instructions=system, input=user)
         if web_search and self.web_search_enabled:
             kwargs["tools"] = [{"type": "web_search"}]
+        if (meta or {}).get("max_tokens"):
+            kwargs["max_output_tokens"] = int(meta["max_tokens"])
         try:
             resp = self.client.responses.create(**kwargs)
         except Exception as exc:  # noqa: BLE001

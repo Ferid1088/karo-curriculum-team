@@ -41,7 +41,51 @@ providers:
   mock:
     default_model: mock
 
-# Modell pro Rolle (optional). Leer = default_model des Providers.
+# Faehigkeit -> Modell pro Provider (PART 15-16). Die Domaenenlogik kennt
+# nur Faehigkeiten (reasoning_xhigh, writing_high …); hier wird die
+# konkrete Modellwahl festgelegt. Reihenfolge bei der Aufloesung:
+# role_models > capabilities > default_model. Die OpenRouter-Basis ist die
+# Anfangshypothese – Benchmarking kann sie anheben oder absenken.
+capabilities:
+  openrouter:
+    reasoning_xhigh: openai/gpt-5.1
+    reasoning_high: openai/gpt-5.1
+    reasoning_balanced: openai/gpt-5-mini
+    writing_high: anthropic/claude-sonnet-4.5
+    high_volume: openai/gpt-5-mini
+    multimodal_high: anthropic/claude-sonnet-4.5
+    image_generation: openai/gpt-image-1
+  claude_token:
+    reasoning_xhigh: opus
+    reasoning_high: opus
+    reasoning_balanced: sonnet
+    writing_high: sonnet
+    high_volume: haiku
+    multimodal_high: opus
+  anthropic_api:
+    reasoning_xhigh: claude-opus-4-1
+    reasoning_high: claude-opus-4-1
+    reasoning_balanced: claude-sonnet-4-5
+    writing_high: claude-sonnet-4-5
+    high_volume: claude-haiku-4-5
+    multimodal_high: claude-opus-4-1
+  openai:
+    reasoning_xhigh: gpt-5.1
+    reasoning_high: gpt-5.1
+    reasoning_balanced: gpt-5-mini
+    writing_high: gpt-5.1
+    high_volume: gpt-5-mini
+    multimodal_high: gpt-5.1
+    image_generation: gpt-image-1
+  mock: {}
+  devin: {}
+
+# Tokenbudget je Fabrik-Rolle (PART 17); fehlende Eintraege nehmen die
+# eingebauten Anfangswerte in kcteam/capabilities.py.
+role_token_budget:
+  # lernsimulator: 6000      # Beispiel-Override
+
+# Modell pro Rolle (optional). Leer = Faehigkeit->Modell, dann default_model.
 # Der Inspektor sollte das stärkste Modell bekommen.
 role_models:
   claude_token:

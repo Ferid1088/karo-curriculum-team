@@ -75,6 +75,14 @@ CREATE VIRTUAL TABLE concept_search USING fts5(
     concept_id UNINDEXED, subject_code UNINDEXED, title, description, search_terms,
     tokenize = 'unicode61 remove_diacritics 2');
 
+-- Fertige Komplettpakete fuer die deterministische Laufzeit (Factory).
+-- Karo liest content als JSON; die Engine braucht kein Modell.
+CREATE TABLE complete_packages (
+    topic_id TEXT PRIMARY KEY, concept_id TEXT, status TEXT NOT NULL,
+    content TEXT NOT NULL,               -- COMPLETE_TOPIC_PACKAGE als JSON
+    manifest TEXT,                       -- Vollstaendigkeits-Manifest als JSON
+    contract_version TEXT, content_version INTEGER, updated_at TEXT);
+
 -- Aufgaben ohne Lösung (für Ansichten, die das Kind sieht)
 CREATE VIEW items_for_child AS
 SELECT id, concept_id, kind, level, grade, prompt, representation, visual_svg, interaction,
@@ -102,6 +110,13 @@ GROUP BY c.id ORDER BY depth DESC, c.target_grade, c.id
 
 def _j(v) -> str | None:
     return None if v is None else json.dumps(v, ensure_ascii=False, separators=(",", ":"))
+
+
+def _table_exists(db, schema: str, table: str) -> bool:
+    """Aeltere Arbeitsdatenbanken kennen die Fabrik-Tabellen noch nicht."""
+    r = db.one("""SELECT count(*) AS n FROM information_schema.tables
+                  WHERE table_schema=%s AND table_name=%s""", (schema, table))
+    return bool(r and r["n"])
 
 
 def export_sqlite(db, out_path: str | os.PathLike, subject_codes: list[str] | None = None) -> dict:
@@ -164,8 +179,22 @@ def export_sqlite(db, out_path: str | os.PathLike, subject_codes: list[str] | No
         con.executemany("INSERT INTO visual_explanations VALUES (?,?,?,?,?,?,?,?)",
                         [(v["id"], v["concept_id"], v["key"], v["purpose"], v["level"], v["misconception_id"],
                           _j(v["steps"]), v["sort_order"]) for v in vis])
+        # Komplettpakete der Fabrik (fertige, kindfertige Stande)
+        pkg_filter = "AND i.subject_code = ANY(%s)" if subject_codes else ""
+        pkgs = db.query(f"""SELECT p.topic_id, p.concept_id, p.status, p.content, p.manifest,
+                                   p.contract_version, p.content_version, p.updated_at
+                            FROM curriculum.complete_packages p
+                            LEFT JOIN curriculum.catalog_items i ON i.id = p.topic_id
+                            WHERE p.status IN ('READY_CORE','READY_COMPLETE')
+                              {pkg_filter}""",
+                        (codes,) if subject_codes else ()) if _table_exists(db, "curriculum", "complete_packages") else []
+        con.executemany("INSERT INTO complete_packages VALUES (?,?,?,?,?,?,?,?)",
+                        [(p["topic_id"], p.get("concept_id"), p["status"],
+                          _j(p["content"]), _j(p["manifest"]), p["contract_version"],
+                          p["content_version"], str(p["updated_at"])) for p in pkgs])
         counts = {"subjects": len(subjects), "concepts": len(concepts), "prerequisites": len(edges),
-                  "misconceptions": len(mis), "items": len(items), "visual_explanations": len(vis)}
+                  "misconceptions": len(mis), "items": len(items), "visual_explanations": len(vis),
+                  "complete_packages": len(pkgs)}
         meta = {"export_version": str(EXPORT_VERSION), "exported_at": datetime.now(timezone.utc).isoformat(),
                 "source": "karo-curriculum-team", "subjects": ",".join(sorted(codes)),
                 "learning_path_sql": LEARNING_PATH_SQL.strip(), **{f"count_{k}": str(v) for k, v in counts.items()}}

@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}Paket {{ p.topic_id }}{% endblock %}
+{% block main %}
+<h1>{{ p.topic_id }} <span class="pill s-{{ p.status }}">{{ p.status }}</span></h1>
+<div class="note">Vertrag {{ p.contract_version }} · Thema v{{ p.topic_version }} · Inhalt v{{ p.content_version }}{% if p.fail_reason %} · <b>{{ p.fail_reason }}</b>{% endif %}</div>
+
+<h2>Vollständigkeit ({{ p.manifest.coverage.components if p.manifest else 0 }})</h2>
+{% if p.manifest %}<div class="scroll"><table><thead><tr><th>Komponente</th><th>Stand</th><th>Hinweis</th><th>n</th></tr></thead><tbody>
+{% for it in p.manifest.items %}<tr><td>{{ it.component }}</td><td><span class="pill s-{{ it.state }}">{{ it.state }}</span></td><td>{{ it.reason }}</td><td>{{ it.count }}</td></tr>{% endfor %}
+</tbody></table></div>{% else %}<p class="muted">Kein Manifest.</p>{% endif %}
+
+<h2>Nachweise</h2>
+{% if qe %}<table><tbody>{% for k, v in qe.items() %}<tr><th>{{ k }}</th><td>{{ v|pretty }}</td></tr>{% endfor %}</tbody></table>{% endif %}
+
+<h2>Stufen</h2>
+<div class="scroll"><table><thead><tr><th>Stufe</th><th>Stand</th><th>Detail</th><th>Stand</th></tr></thead><tbody>
+{% for s in stages %}<tr><td>{{ s.stage }}</td><td><span class="pill s-{{ s.status }}">{{ s.status }}</span></td><td>{{ s.detail|short(90) }}</td><td class="small">{{ s.updated_at.strftime('%d.%m.%y %H:%M') if s.updated_at }}</td></tr>{% endfor %}
+</tbody></table></div>
+
+{% if sims %}<h2>Simulationen</h2><div class="scroll"><table><thead><tr><th>Profil</th><th>Ergebnis</th></tr></thead><tbody>
+{% for k, v in sims.items() %}<tr><td>{{ k }}</td><td><span class="pill s-{{ v }}">{{ v }}</span></td></tr>{% endfor %}
+</tbody></table></div>{% endif %}
+{% endblock %}

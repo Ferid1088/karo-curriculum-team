@@ -28,13 +28,35 @@ ROLES = {
     "kinderrechts_inspektor": "Kinderrechts-Inspektor",
     "curriculum_agent": "Curriculum-Agent",
     "lektionsautor": "Lektionsautor",
+    # Fabrik-Rollen (PART 14) — jede Rolle liefert strukturiertes JSON,
+    # niemals freien Prosa-Output ins Paket.
+    "katalog_rechercheur": "Katalog-Rechercheur",
+    "kompetenz_architekt": "Kompetenz-Architekt",
+    "lernreise_architekt": "Lernreise-Architekt",
+    "fachexperte": "Fachexperte",
+    "fehlvorstellungs_analytiker": "Fehlvorstellungs-Analytiker",
+    "didaktik_designer": "Didaktik-Designer",
+    "erklaerautor": "Erklärautor",
+    "aufgaben_designer": "Aufgaben-Designer",
+    "vorlagen_ingenieur": "Vorlagen-Ingenieur",
+    "rubrik_ingenieur": "Rubrik-Ingenieur",
+    "visueller_lerndesigner": "Visueller Lerndesigner",
+    "bildprompt_designer": "Bildprompt-Designer",
+    "visueller_inspektor": "Visueller Inspektor",
+    "pruefungs_designer": "Wiederholungs- und Prüfungs-Designer",
+    "lernsimulator": "Lernsimulator",
+    "curriculum_kritiker": "Curriculum-Kritiker",
+    "vollstaendigkeits_kontrolleur": "Vollständigkeits-Kontrolleur",
 }
 # Rollen, für die Karos Spezifikation relevant ist (spart Tokens bei den anderen)
-SPEC_ROLES = {"curriculum_analyst", "fachdidaktiker", "diagnostiker", "visual_didaktiker", "curriculum_agent"}
+SPEC_ROLES = {"curriculum_analyst", "fachdidaktiker", "diagnostiker", "visual_didaktiker", "curriculum_agent",
+              "kompetenz_architekt", "lernreise_architekt", "fachexperte", "didaktik_designer",
+              "aufgaben_designer", "vorlagen_ingenieur", "visueller_lerndesigner", "pruefungs_designer",
+              "curriculum_kritiker", "vollstaendigkeits_kontrolleur"}
 ROLE_STAGE = {"curriculum_analyst": "curriculum", "fachdidaktiker": "graph", "niveau_kalibrierer": "calibration",
               "diagnostiker": "diagnostics", "visual_didaktiker": "visuals", "kritiker": "critic",
               "kinderrechts_inspektor": "inspection", "curriculum_agent": "match",
-              "lektionsautor": "lesson"}
+              "lektionsautor": "lesson", "katalog_rechercheur": "catalog"}
 
 #: Obergrenze fuer die Rückmeldung im Auftrag — genug Raum fuer konkrete
 #: Hinweise, nicht genug, um die Anbietergrenze zu sprengen.
@@ -269,6 +291,9 @@ class AgentRunner:
                      "\n\nGib das vollständige, überarbeitete JSON-Objekt zurück.")
         model = self.cfg.model_for(self.provider.name, role)
         meta = {**(meta or {}), "role": role, "entity_id": entity_id, "feedback": feedback, "payload": payload}
+        budget = self.cfg.token_budget_for(role)
+        if budget:
+            meta["max_tokens"] = budget   # PART 17: Rollen-Tokenbudget
 
         last_error = ""
         attempts = 1 + int(self.cfg.p("max_json_retries", 2))
